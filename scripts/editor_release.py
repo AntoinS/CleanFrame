@@ -30,7 +30,8 @@ def freeze(release,project,storage):
     capture=source/'.local/editor';capture.mkdir(parents=True);write(capture/'project.json',project)
     patch={k:v for k,v in project['preferences'].items() if project['basePrefs'].get(k)!=v}
     write(release/'preferences.json',{'base':project['basePrefs'],'patch':patch,'capturedAt':project.get('baseCapturedAt')})
-    counter=storage/'next-version.json';version=max(11,json.loads(counter.read_text())) if counter.exists() else 11;write(counter,version+1);write(release/'version.json',{'code':version,'name':json.loads((ROOT/'package.json').read_text())['version']+'-android'+str(version)})
+    metadata=json.loads((ROOT/'package.json').read_text());minimum=metadata['cleanframe']['androidVersionCode']
+    counter=storage/'next-version.json';version=max(minimum,json.loads(counter.read_text())) if counter.exists() else minimum;write(counter,version+1);write(release/'version.json',{'code':version,'name':json.loads((ROOT/'package.json').read_text())['version']+'-android'+str(version)})
     config=storage/'toolchain.json'
     if config.exists():shutil.copy2(config,release/'toolchain.json')
     inputs={str(p.relative_to(source)):digest(p) for p in sorted(source.rglob('*')) if p.is_file() and '.local' not in p.relative_to(source).parts}

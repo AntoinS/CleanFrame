@@ -2,6 +2,8 @@ plugins {
     id 'com.android.application'
 }
 
+def cleanframeMetadata = new groovy.json.JsonSlurper().parse(file('../../package.json'))
+
 android {
     namespace 'com.cleanframe.philips'
     compileSdk 35
@@ -11,8 +13,8 @@ android {
         applicationId 'com.cleanframe.philips'
         minSdk 31
         targetSdk 35
-        versionCode = (project.findProperty('cleanframeVersionCode') ?: '11').toInteger()
-        versionName = new groovy.json.JsonSlurper().parse(file('../../package.json')).version + '-android' + (project.findProperty('cleanframeVersionCode') ?: '11')
+        versionCode = (project.findProperty('cleanframeVersionCode') ?: cleanframeMetadata.cleanframe.androidVersionCode).toString().toInteger()
+        versionName = cleanframeMetadata.version + '-android' + versionCode
     }
 
     compileOptions {

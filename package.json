@@ -31,5 +31,8 @@
   "license": "MIT",
   "engines": {
     "node": "^22.13.0 || >=24"
+  },
+  "cleanframe": {
+    "androidVersionCode": 16
   }
 }

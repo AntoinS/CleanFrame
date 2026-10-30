@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="starting">CleanFrame startet …</string>
+    <string name="load_failed">CleanFrame konnte nicht angezeigt werden.</string>
+    <string name="open_original_home">Originalen Startbildschirm öffnen</string>
+    <string name="spotify_qr_description">QR Code für die Spotify Anmeldung</string>
+    <string name="spotify_connect">Spotify verbinden</string>
+    <string name="spotify_preparing">Anmeldung wird vorbereitet …</string>
+    <string name="back">Zurück</string>
+    <string name="spotify_scan">Scanne den QR-Code mit deinem Handy und melde dich direkt bei Spotify an. Verwende dasselbe Konto wie in der Spotify TV-App.</string>
+    <string name="spotify_pairing_code">Code: %1$s · 10 Minuten gültig</string>
+    <string name="spotify_unreachable">Der Anmeldedienst ist gerade nicht erreichbar. Bitte versuche es später erneut.</string>
+    <string name="spotify_expired">Der QR-Code ist abgelaufen. Öffne die Anmeldung erneut.</string>
+    <string name="spotify_cancelled">Die Anmeldung wurde abgebrochen. Deine bisherige Verbindung bleibt erhalten.</string>
+    <string name="spotify_connected">Spotify ist verbunden</string>
+    <string name="spotify_returning">Du kehrst gleich zu CleanFrame zurück.</string>
+    <string name="spotify_failed">Die Verbindung konnte nicht abgeschlossen werden. Öffne die Anmeldung erneut. Deine bisherige Verbindung bleibt erhalten.</string>
+</resources>

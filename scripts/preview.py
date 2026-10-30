@@ -1,6 +1,7 @@
 """Serve the actual TV UI and the retained design gallery on this Mac."""
 import argparse
 import io
+import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -16,6 +17,13 @@ class PreviewServer(ThreadingHTTPServer):
 class Preview(SimpleHTTPRequestHandler):
     def send_head(self):
         route = unquote(urlsplit(self.path).path)
+        if route == '/home/design.json' and os.environ.get('CLEANFRAME_BASELINE_DESIGN') == '1':
+            content = b'{"version":1,"rules":[]}'
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(content)))
+            self.end_headers()
+            return io.BytesIO(content)
         if route in ['/home/assets/font-catalog.js', '/home/assets/private-fonts.css'] or route.startswith('/home/assets/private-fonts/'):
             source = font_overlay(include_private=self.server.include_private_fonts).get(route[len('/home/'):])
             if source is None:

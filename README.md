@@ -1,3 +1,5 @@
+> Personal Android TV and Mac editor continuation: private source is maintained at AntoinS/CleanFrame. See [versions and releases](docs/releases.md), [Android setup](android/README.md), [editor](docs/editor.md) and [add-ons](docs/addons.md). Original upstream documentation and MIT attribution follow below.
+
 # CleanFrame
 
 A quieter home screen for Samsung The Frame. Your apps, a photograph and the time, with an interface made for the TV remote.

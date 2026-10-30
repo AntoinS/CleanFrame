@@ -1,6 +1,15 @@
 /* CleanFrame Home. Static materials, local preferences and public Tizen app controls. */
 (function () {
   'use strict';
+  var ANDROID = window.FrameDevice && window.FrameDevice.platform === 'android';
+  var ADDONS = window.CleanFrameAddons;
+  var SPOTIFY = !!(ANDROID && FrameDevice.capabilities.spotify);
+  var spotifyState = { status: 'idle' }, spotifyAt = 0, spotifyTimer = 0, spotifyObserving = null;
+  var spotifyCommands = ['previous', 'toggle', 'next'];
+  var spotifyAwake = false, spotifyIdleTimer = 0;
+  var HOME_OPTIONS = ['dateVisible', 'spotifyEnabled', 'spotifySurface', 'spotifyTransparency', 'controlsPosition', 'language'];
+  var ORIGINAL_HOME = ANDROID ? 'Original Home' : 'Samsung Home';
+  var DEVICE_LABEL = ANDROID ? 'Android TV' : 'Samsung';
 
   /* ---------- Bundled data ---------- */
   var ASSETS = 'assets/', ICONS = ASSETS + 'icons/', WP = ASSETS + 'wallpapers/';
@@ -13,7 +22,7 @@
   var KEYS = { 37: 'left', 38: 'up', 39: 'right', 40: 'down', 13: 'ok', 27: 'back', 8: 'back', 10009: 'back', 461: 'back' };
   var FULL = 'Home holds nine apps. Remove one first.', LAST = 'Home needs one app';
 
-  var PRIMARY_APPS = [
+  var PRIMARY_APPS = ANDROID ? FrameDevice.defaultApps() : [
     { id: 'stremio', name: 'Stremio', mark: true, appId: 'IkWsFHtOY9.Stremio' },
     { id: 'netflix', name: 'Netflix', mark: true, appId: 'org.tizen.netflix-app' },
     { id: 'disneyplus', name: 'Disney+', mark: true, appId: 'MCmYXNxgcu.DisneyPlus' },
@@ -46,10 +55,10 @@
   var PRIVATE_FONTS = window.CleanFramePrivateFontIDs || [], fontMetrics = {}, unavailableFonts = {}, widthCache = {}, fontRevision = 0, fontsReady = false;
   var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'] };
   var LOOK_NAMES = { bg: 'Background', layout: 'Layout', apps: 'Apps', font: 'Font', controls: 'Home controls', focus: 'Focus', material: 'Material' };
-  var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text' };
+  var VALUE_NAMES = { dark: 'Dark', light: 'Light', cover: 'Cover colour', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text', auto: 'Automatic', top: 'Top right', bottom: 'Bottom right', de: 'Deutsch', en: 'English' };
   var UTIL = { art: ['Art Mode', 'art'], apps: ['All apps', 'apps'], arrange: ['Arrange', 'arrange'], settings: ['Settings', 'settings'] };
   var MSG = {
-    leave: { title: 'Leave Home?', line: 'Open Samsung Home?', note: '', actions: [['stay', 'Stay'], ['samsung', 'Samsung Home']] }
+    leave: { title: 'Leave Home?', line: 'Open ' + ORIGINAL_HOME + '?', note: '', actions: [['stay', 'Stay'], ['samsung', ORIGINAL_HOME]] }
   };
   var SVG = {
     art: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="9.8" r="1.5"/><path d="m4.5 17.5 4.5-4.5 3 3 2.5-2.5 5 5"/>',
@@ -66,6 +75,10 @@
     down: '<path d="m5 8.5 7 7 7-7"/>',
     updown: '<path d="m7.5 9.5 4.5-4.5 4.5 4.5M7.5 14.5l4.5 4.5 4.5-4.5"/>',
     tv: '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8.5 20h7"/>',
+    play: '<path d="m8 4 12 8-12 8Z"/>',
+    pause: '<path d="M8 5v14M16 5v14"/>',
+    previous: '<path d="M5 5v14M19 5 7 12l12 7Z"/>',
+    next: '<path d="M19 5v14M5 5l12 7-12 7Z"/>',
     warn: '<path d="M12 4 2.8 19.5h18.4Z"/><path d="M12 10v4.5M12 17.3v.1"/>'
   };
 
@@ -89,6 +102,7 @@
   function materialApplies(c) { c = c || S.c; return c.bg === 'photo' && (c.layout === 'dock' || c.focus === 'glass'); }
 
   /* ---------- Helpers ---------- */
+  function translate(value) { return window.CleanFrameI18n.text(S.c ? S.c.language : 'en', value); }
   function app(id) { for (var i = 0; i < APPS.length; i++) if (APPS[i].id === id) return APPS[i]; return null; }
   function wall(id) { for (var i = 0; i < WALLS.length; i++) if (WALLS[i].id === id) return WALLS[i]; return null; }
   function wallIndex(id) { for (var i = 0; i < WALLS.length; i++) if (WALLS[i].id === id) return i; return 0; }
@@ -272,7 +286,7 @@
   function reducedDockLabel(id) { return S.c.apps !== 'icons' && dockLabelSize(id) === (S.c.apps === 'text' ? 34 : 32); }
   function actionWidth(text) { return clamp(Math.ceil(textWidth(text, 30, 500, -.3) + 40), 288, 400); }
   function photoLabel(id, compact) {
-    var text = app(id).name, size = compact ? 56 : 88, limit = compact ? 640 : 992, width = textWidth(text, size, 600, -1.8, 'display');
+    var text = app(id).name, size = compact ? 56 : 88, limit = compact ? 640 : spotifyExpanded() ? 360 : 992, width = textWidth(text, size, 600, -1.8, 'display');
     if (!compact && width > limit) { size = 76; width = textWidth(text, size, 600, -1.8, 'display'); }
     // Newsreader's ninth compact Type row otherwise enters the lower fade by .63px.
     return { size: size, top: (compact ? 10.66 : size === 76 ? 10.36 : 9.68) + fontShift('display', size) - (compact && homeFont() === 'newsreader' ? .7 : 0), width: Math.min(limit, width), ellipsis: width > limit };
@@ -297,6 +311,7 @@
     for (k in map) if (map.hasOwnProperty(k) && !seen[k]) { if (map[k].parentNode === parent) parent.removeChild(map[k]); delete map[k]; }
   }
   function setContent(el, sig, renderContent) {
+    sig += '|' + S.c.language;
     sig += '|' + catalog.revision + '|' + fontRevision;
     if (el._sig === sig) return;
     el.innerHTML = renderContent();
@@ -346,7 +361,12 @@
       focus: pick(modern.focus, LOOK_VALUES.focus, legacyList ? 'type' : 'glass'), material: pick(modern.material, LOOK_VALUES.material, 'soft'),
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
       home: h, recent: recent, lastApp: h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
-      mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed')
+      mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed'),
+      dateVisible: s.dateVisible !== false, spotifyEnabled: s.spotifyEnabled !== false,
+      spotifySurface: pick(s.spotifySurface, ['dark', 'light', 'cover'], 'dark'),
+      spotifyTransparency: typeof s.spotifyTransparency === 'number' && isFinite(s.spotifyTransparency) ? clamp(Math.round(s.spotifyTransparency / 5) * 5, 0, 100) : 60,
+      controlsPosition: pick(s.controlsPosition, ['auto', 'top', 'bottom'], 'auto'),
+      language: pick(s.language, ['de', 'en'], /^de\b/i.test(window.navigator.language) ? 'de' : 'en')
     };
   }
   function serialise(c) {
@@ -371,7 +391,7 @@
   }
   function clearSession() { S.undo = []; S.removedAt = {}; S.note = null; S.err = null; }
   function begin() { S.note = null; }
-  function next(home, recent) { var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode; return c; }
+  function next(home, recent) { var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode; HOME_OPTIONS.forEach(function (key) { c[key] = S.c[key]; }); return c; }
   function snap() { return { home: S.c.home.slice(), recent: S.c.recent.slice() }; }
   function pushRecent(list, id) { return [id].concat(without(list, id)).slice(0, 5); }
   function write(c, label) {
@@ -382,11 +402,11 @@
     return true;
   }
   function errText(lifted) {
-    return 'Couldn’t save. Nothing changed.';
+    return translate('Couldn’t save. Nothing changed.');
   }
   function statusHtml(def, lifted) {
     if (S.err) return '<span class="warn error-chip">' + esc(errText(lifted)) + '</span>';
-    return esc(S.note || def);
+    return esc(translate(S.note || def));
   }
 
   function ensureSel() {
@@ -405,9 +425,9 @@
     if (i < 0) return false;
     if (S.c.home.length <= 1) { S.note = LAST; return false; }
     h = S.c.home.slice(); h.splice(i, 1);
-    if (!write(next(h, pushRecent(S.c.recent, id)), 'Remove ' + a.name + ' from Home')) return false;
+    if (!write(next(h, pushRecent(S.c.recent, id)), translate('Remove ') + a.name + translate(' from Home'))) return false;
     S.removedAt[id] = i;
-    S.undo.push({ label: 'Remove ' + a.name, snap: before });
+    S.undo.push({ label: translate('Remove ') + a.name, snap: before });
     return true;
   }
   function homeAdd(id) {
@@ -415,44 +435,44 @@
     if (h.length >= CAP) { S.note = FULL; return false; }
     at = S.removedAt.hasOwnProperty(id) ? Math.min(S.removedAt[id], h.length) : h.length;
     h.splice(at, 0, id);
-    if (!write(next(h, without(S.c.recent, id)), 'Add ' + a.name + ' to Home')) return false;
-    S.undo.push({ label: 'Add ' + a.name, snap: before });
+    if (!write(next(h, without(S.c.recent, id)), translate('Add ') + a.name + translate(' to Home'))) return false;
+    S.undo.push({ label: translate('Add ') + a.name, snap: before });
     return true;
   }
   function homeMove(order, id, before) {
     var a = app(id);
-    if (!write(next(order, S.c.recent.slice()), 'Move ' + a.name)) return false;
-    S.undo.push({ label: 'Move ' + a.name, snap: before });
+    if (!write(next(order, S.c.recent.slice()), translate('Move ') + a.name)) return false;
+    S.undo.push({ label: translate('Move ') + a.name, snap: before });
     return true;
   }
   function undoLast(arr) {
     var u = S.undo[S.undo.length - 1];
-    if (!u) { S.note = 'Nothing to undo'; return false; }
-    if (!write(next(u.snap.home.slice(), u.snap.recent.slice()), 'Undo ' + u.label)) return false;
+    if (!u) { S.note = translate('Nothing to undo'); return false; }
+    if (!write(next(u.snap.home.slice(), u.snap.recent.slice()), translate('Undo ') + u.label)) return false;
     S.undo.pop();
-    S.note = 'Undone: ' + u.label + '.';
+    S.note = translate('Undone: ') + u.label + '.';
     return true;
   }
   function undoLabel() { var u = S.undo[S.undo.length - 1]; return u ? u.label : ''; }
-  function undoCaption() { var label = undoLabel(); return label ? 'Undo ' + label.charAt(0).toLowerCase() + label.slice(1) : 'Nothing to undo'; }
+  function undoCaption() { var label = undoLabel(); return label ? translate('Undo ') + label.charAt(0).toLowerCase() + label.slice(1) : translate('Nothing to undo'); }
   function editStatus(hint, move) {
     if (S.err) return statusHtml('', !!move);
-    if (S.note === FULL || S.note === LAST) return '<span class="warn">' + esc(S.note) + '</span>';
-    if (hint === FULL || hint === LAST) return '<span class="warn">' + esc(hint) + '</span>';
-    return esc(move || hint || S.note || '');
+    if (S.note === FULL || S.note === LAST) return '<span class="warn">' + esc(translate(S.note)) + '</span>';
+    if (hint === FULL || hint === LAST) return '<span class="warn">' + esc(translate(hint)) + '</span>';
+    return esc(translate(move || hint || S.note || ''));
   }
 
   var busy = false, busyTimer = 0;
   function release() { busy = false; clearTimeout(busyTimer); S.press = null; }
   function message(title, line, note) {
-    push({ id: 'message', msg: 'error', content: { title: title, line: line, note: note || '', actions: [['back', 'Back']] }, f: { b: 0 } });
+    push({ id: 'message', msg: 'error', content: { title: title, line: line, note: note || '', actions: [['back', translate('Back')]] }, f: { b: 0 } });
   }
   function perform(title, run) {
     if (busy) return;
     busy = true; busyTimer = setTimeout(release, 10000);
     run(function (err) {
       release();
-      if (err) message(title, err.message || 'The TV could not open this screen.', err.detail || '');
+      if (err) message(title, err.message || translate('The TV could not open this screen.'), err.detail || '');
       render(); syncRotation();
     });
   }
@@ -470,7 +490,7 @@
     FrameDevice.apps(function (err, entries) {
       if (request !== catalog.request) return;
       catalog.loading = false;
-      if (err) { catalog.error = err.message || 'Could not read installed apps.'; if (!catalog.loaded) ALPHA = []; render(); return; }
+      if (err) { catalog.error = err.message || translate('Could not read installed apps.'); if (!catalog.loaded) ALPHA = []; render(); return; }
       oldFocus = top().id === 'apps' ? ALPHA[top().f.i] : null;
       ALPHA = [];
       entries.forEach(function (entry) {
@@ -491,21 +511,23 @@
   }
 
   /* ---------- Navigation targets ---------- */
-  function utils() { return ['art', 'apps', 'settings']; }
+  function utils() { return ANDROID ? ['apps', 'settings'] : ['art', 'apps', 'settings']; }
+  function utilsTop() { return S.c.controlsPosition === 'top' || S.c.controlsPosition === 'auto' && S.c.layout === 'dock' && !spotifyVisible(); }
+  function utilsStacked() { return S.c.controlsPosition !== 'auto' || S.c.layout === 'list' || spotifyVisible(); }
   /* prev/next run along the apps; out goes to the controls, inn comes back (or to a per-app action). */
   function axes() {
     var v = S.c.layout === 'list';
     return { prev: v ? 'up' : 'left', next: v ? 'down' : 'right', out: v ? 'right' : 'up', inn: v ? 'left' : 'down' };
   }
   function utilAction(u) {
-    if (u === 'art') perform('Art Mode', FrameDevice.art);
+    if (u === 'art') perform(translate('Art Mode'), FrameDevice.art);
     else if (u === 'apps') openApps();
     else openSettings();
   }
   function addAppsRoute() { openEditor('home'); }
   function openSettings() { push({ id: 'settings', f: { id: S.settingsFocus } }); }
   function openAppearance(group) {
-    var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus' }[group];
+    var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', clock: 'dateVisible', spotify: 'spotifyEnabled', language: 'language' }[group];
     var action = S.detailFocus[group] || (axis ? 'choice.' + axis + '.' + S.c[axis] : group === 'rotation' ? 'rotation.' + S.c.mode : 'samsung.home');
     push({ id: 'appearance', group: group, f: { action: action } });
   }
@@ -532,8 +554,20 @@
 
   /* ---------- Home (browse) ---------- */
   V.home = {
+    norm: function (t) { if (t.f.zone === 'spotify' && !spotifyVisible()) t.f.zone = 'apps'; },
     key: function (t, k) {
       var f = t.f, h = S.c.home, U = utils(), x = axes(), i = ensureSel();
+      if (f.zone === 'spotify') { spotifyKey(t, k); return; }
+      if (f.zone === 'util' && (spotifyVisible() || S.c.controlsPosition !== 'auto')) {
+        f.u = clamp(f.u, 0, U.length - 1);
+        if (k === 'up' && f.u > 0) f.u--;
+        else if (k === 'down' && f.u < U.length - 1) f.u++;
+        else if (spotifyVisible() && (k === 'left' && S.c.controlsPosition === 'auto' || k === (S.c.controlsPosition === 'auto' ? S.c.layout === 'list' ? 'up' : 'down' : utilsTop() ? 'down' : 'up'))) { f.zone = 'spotify'; f.p = 1; }
+        else if (k === 'back' || k === 'left' || k === 'up' || k === 'down') f.zone = 'apps';
+        else if (k === 'ok') { S.lastUtil = f.u; utilAction(U[f.u]); return; }
+        S.lastUtil = f.u;
+        return;
+      }
       if (S.c.layout === 'list') { listHomeKey(t, k, i, U); return; }
       if (f.zone === 'util') {
         f.u = clamp(f.u, 0, U.length - 1);
@@ -546,6 +580,7 @@
       }
       f.zone = 'apps';
       if (k === x.out) { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
+      else if (k === 'down' && spotifyVisible()) { f.zone = 'spotify'; f.p = 1; }
       else if (k === 'back') openMessage('leave');
       else if (!h.length) { if (k === 'ok') addAppsRoute(); }
       else if (k === x.prev && i > 0) setSel(h[i - 1]);
@@ -553,9 +588,11 @@
       else if (k === 'ok') launch(S.sel);
     },
     point: function (t, z, i) {
+      if (z === 'spotify-entry' && spotifyVisible()) { t.f.zone = 'spotify'; t.f.p = 1; return; }
       if (z === 'util') { t.f.zone = 'util'; t.f.u = i; S.lastUtil = i; }
       else if (z === 'app') { t.f.zone = 'apps'; setSel(S.c.home[i]); }
       else if (z === 'empty') t.f.zone = 'apps';
+      else if (z === 'spotify' && spotifyVisible()) { t.f.zone = 'spotify'; t.f.p = i; }
       else return;
       this.key(t, 'ok');
     }
@@ -573,6 +610,7 @@
     }
     f.zone = 'apps';
     if (k === 'up' && i > 0) setSel(h[i - 1]);
+    else if (k === 'down' && i === h.length - 1 && spotifyVisible()) { f.zone = 'spotify'; f.p = 1; }
     else if (k === 'right') { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
     else if (k === 'down' && i < h.length - 1) setSel(h[i + 1]);
     else if (k === 'back') openMessage('leave');
@@ -599,7 +637,7 @@
     if (w.id === S.c.wall) { S.err = null; t.failedId = null; t.failedApply = false; t.retryBundle = null; return; }
     if (!bundle || bundle.key !== bundleKey({ wall: w.id, material: S.c.material })) { t.applyPending = w.id; loadWallpaperPreview(t); return; }
     c = next(S.c.home.slice(), S.c.recent.slice()); c.wall = w.id;
-    if (!write(c, 'Wallpaper ' + w.name)) { failWallpaper(t, w.id, true, bundle); return; }
+    if (!write(c, translate('Wallpaper ') + w.name)) { failWallpaper(t, w.id, true, bundle); return; }
     installBundle(bundle, c); committedBundle = bundle; S.previewBundle = null;
     t.failedId = null; t.failedApply = false; t.retryBundle = null;
   }
@@ -682,7 +720,7 @@
 
   /* ---------- Installed apps ---------- */
   function appsItems() { return catalog.error ? [] : ALPHA; }
-  function appsHead() { return catalog.error ? [['retry', 'Try again', '', '']] : [['editor', 'Apps on Home', '', 'home']]; }
+  function appsHead() { return catalog.error ? [['retry', translate('Try again'), '', '']] : [['editor', translate('Apps on Home'), '', 'home']]; }
   V.apps = {
     sheet: true,
     norm: function (t) {
@@ -792,7 +830,7 @@
   function editorRemove(t, id) {
     if (!homeRemove(id)) return;
     t.f.zone = 'other'; t.f.j = otherList().indexOf(id);
-    S.note = app(id).name + ' is in Recently removed. OK puts it back.';
+    S.note = app(id).name + translate(' is in Recently removed. OK puts it back.');
   }
   function editorAdd(t, id) {
     rememberOther(t);
@@ -800,7 +838,7 @@
     var remaining = otherList(), at = clamp(t.otherReturn.index, 0, Math.max(0, remaining.length - 1));
     t.otherReturn.id = remaining[at] || null; t.otherReturn.index = at;
     t.f.zone = 'home'; t.f.i = S.c.home.indexOf(id); t.f.part = 'remove';
-    S.note = app(id).name + ' is on Home, position ' + (t.f.i + 1) + '.';
+    S.note = app(id).name + translate(' is on Home, position ') + (t.f.i + 1) + '.';
   }
   function editorPlace(t) {
     var L = t.lifted;
@@ -808,20 +846,30 @@
     if (same(L.order, S.c.home)) { t.lifted = null; return; }
     if (!homeMove(L.order.slice(), L.id, L.snap)) return;
     t.lifted = null;
-    S.note = app(L.id).name + ' moved to position ' + (t.f.i + 1) + '.';
+    S.note = app(L.id).name + translate(' moved to position ') + (t.f.i + 1) + '.';
   }
   function closeEditor() { clearSession(); pop(); }
 
   /* ---------- Settings, Layout and messages ---------- */
   function mode() { for (var i = 0; i < MODES.length; i++) if (MODES[i].id === S.c.mode) return MODES[i]; return MODES[0]; }
   function settingsRows() {
-    var n = S.c.home.length;
-    return [{ id: 'background', label: 'Background', value: S.c.bg === 'photo' ? wall(S.c.wall).name : VALUE_NAMES[S.c.bg] },
+    if (!ANDROID) return [
+      { id: 'background', label: 'Background', value: S.c.bg === 'photo' ? wall(S.c.wall).name : VALUE_NAMES[S.c.bg] },
       { id: 'layout', label: 'Layout', value: VALUE_NAMES[S.c.layout] },
       { id: 'typography', label: 'Typography', value: FONTS[S.c.font].name },
-      { id: 'focus', label: 'Focus', value: VALUE_NAMES[S.c.focus] + (materialApplies() ? ', ' + VALUE_NAMES[S.c.material] : '') },
-      { id: 'editor', label: 'Apps on Home', value: n + (n === 1 ? ' app' : ' apps') },
-      { id: 'samsung', label: 'Samsung', value: 'Home and TV settings' }];
+      { id: 'focus', label: 'Focus', value: VALUE_NAMES[S.c.focus] },
+      { id: 'editor', label: 'Apps on Home', value: S.c.home.length + ' apps' },
+      { id: 'clock', label: 'Clock and date', value: S.c.dateVisible ? 'Time and date' : 'Time only' },
+      { id: 'language', label: 'Language', value: S.c.language === 'de' ? 'Deutsch' : 'English' },
+      { id: 'samsung', label: DEVICE_LABEL, value: 'Home and TV settings' }
+    ];
+    return [
+      { id: 'display', label: 'Display', value: translate(VALUE_NAMES[S.c.bg]) + ' · ' + FONTS[S.c.font].name },
+      { id: 'homescreen', label: 'Home screen', value: translate(VALUE_NAMES[S.c.layout]) + ' · ' + S.c.home.length + ' apps' },
+      { id: 'addons', label: 'Add-ons', value: translate('Widgets and extensions') },
+      { id: 'language', label: 'Language', value: S.c.language === 'de' ? 'Deutsch' : 'English' },
+      { id: 'samsung', label: DEVICE_LABEL, value: translate('Picture, sound and network settings') }
+    ];
   }
   function settingsIds() { return settingsRows().map(function (r) { return r.id; }); }
   V.settings = {
@@ -841,45 +889,88 @@
     if (id === 'editor') openEditor('settings');
     else openAppearance(id);
   }
-  var DETAIL_NAMES = { background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: 'Samsung' };
+  var DETAIL_NAMES = { display: 'Display', homescreen: 'Home screen', addons: 'Add-ons', background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: DEVICE_LABEL, clock: 'Clock and date', spotify: 'Spotify', language: 'Language' };
   function choice(axis, value, disabled) {
     return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled,
-      label: axis === 'font' ? FONTS[value].name : axis === 'mode' ? MODES.filter(function (m) { return m.id === value; })[0].name : value === 'both' ? 'Both' : VALUE_NAMES[value] };
+      label: typeof value === 'boolean' ? value ? translate('On') : translate('Off') : axis === 'font' ? FONTS[value].name : axis === 'mode' ? MODES.filter(function (m) { return m.id === value; })[0].name : value === 'both' ? translate('Both') : VALUE_NAMES[value] };
   }
   function detailSections(t) {
     var flat = S.c.bg !== 'photo', inactive = !materialApplies();
     function options(axis, values, disabled) { return values.map(function (value) { return choice(axis, value, disabled); }); }
+    function link(group, description) { return { action: 'group.' + group, label: translate(DETAIL_NAMES[group] || 'Apps on Home'), description: translate(description) }; }
+    if (t.group === 'display') return [{ id: 'display', title: translate('Appearance'), items: [
+      link('background', 'Wallpaper, colour and rotation'),
+      link('typography', 'Font for apps and clock'),
+      link('focus', 'Selection style and glass material')
+    ] }];
+    if (t.group === 'homescreen') return [{ id: 'homescreen', title: translate('Organisation'), items: [
+      link('layout', 'App layout and controls position'),
+      link('editor', 'Choose and arrange apps'),
+      link('clock', 'Time and date')
+    ] }];
+    if (t.group === 'addons') {
+      var addonState = ADDONS.state(), entries = Object.keys(addonState.installed), rows = [{ id: 'catalog', title: translate('Discover'), items: [{ action: 'addon.refresh', label: translate('Refresh catalog'), disabled: addonState.busy }], reason: addonState.busy ? translate('Working…') : addonState.error }];
+      entries.forEach(function (id) {
+        var item = addonState.installed[id];
+        rows.push({ id: 'addon-' + id, title: item.name + ' · ' + item.version, horizontal: true, items: [
+          { action: 'addon.toggle.' + id, label: translate(item.enabled === false ? 'Enable' : 'Disable'), disabled: addonState.busy },
+          { action: 'addon.remove.' + id, label: translate('Uninstall'), disabled: addonState.busy }
+        ].concat(id === 'spotify' ? [{ action: 'group.spotify', label: translate('Settings') }] : []) });
+      });
+      addonState.catalog.forEach(function (item) {
+        var current = addonState.installed[item.id];
+        if (!current || current.version !== item.version) rows.push({ id: 'download-' + item.id, title: item.name + ' · ' + item.version, items: [{ action: 'addon.install.' + item.id, label: translate(current ? 'Update' : 'Download'), description: item.description, disabled: addonState.busy }] });
+      });
+      return rows;
+    }
+    if (t.group === 'language') return [{ id: 'language', title: translate('Language'), horizontal: true, items: options('language', ['de', 'en']) }];
+    if (t.group === 'clock') return [{ id: 'dateVisible', title: translate('Show date'), horizontal: true, items: options('dateVisible', [true, false]), reason: translate('Date below the clock, using the TV time zone.') }];
+    if (t.group === 'spotify') return [
+      { id: 'spotifyEnabled', title: translate('Player on Home'), horizontal: true, items: options('spotifyEnabled', [true, false]) },
+      { id: 'spotifySurface', title: translate('Player background'), horizontal: true, items: options('spotifySurface', ['dark', 'light', 'cover']) },
+      { id: 'spotifyTransparency', title: translate('Transparency'), slider: true, items: [{ action: 'spotify.transparency', label: translate('Transparency') }] },
+      { id: 'spotifyAccount', title: translate('Account'), horizontal: true, items: [
+        { action: 'spotify.signin', label: translate('Sign in with QR') },
+        { action: 'spotify.signout', label: translate('Sign out'), disabled: !spotifyState.webLinked && spotifyState.webApi !== 'connected' && spotifyState.webApi !== 'signout_failed' }
+      ], reason: spotifyState.webLinked || spotifyState.webApi === 'connected' ? translate('Account connected') : translate('Not signed in') },
+      { id: 'spotifyAccess', title: translate('Connection'), horizontal: true, items: [
+        { action: 'spotify.access', label: spotifyState.permission ? translate('Access granted') : translate('Allow media access') },
+        { action: 'spotify.open', label: translate('Open Spotify') }
+      ], reason: spotifyStatus() }
+    ];
     if (t.group === 'background') return [
-      { id: 'bg', title: 'Background type', items: options('bg', ['photo', 'light', 'dark']) },
-      { id: 'wall', title: 'Wallpaper', items: [{ action: 'background.wallpaper', label: wall(S.c.wall).name, thumbnail: true, disabled: flat }] },
-      { id: 'rotation', title: 'Rotation', items: [{ action: 'background.rotation', label: mode().name, disabled: flat }], reason: flat ? 'Choose Photo to use wallpaper and rotation.' : '' }
+      { id: 'bg', title: translate('Background type'), items: options('bg', ['photo', 'light', 'dark']) },
+      { id: 'wall', title: translate('Wallpaper'), items: [{ action: 'background.wallpaper', label: wall(S.c.wall).name, thumbnail: true, disabled: flat }] },
+      { id: 'rotation', title: translate('Rotation'), items: [{ action: 'background.rotation', label: mode().name, disabled: flat }], reason: flat ? translate('Choose Photo to use wallpaper and rotation.') : '' }
     ];
     if (t.group === 'layout') return [
-      { id: 'layout', title: 'Layout', horizontal: true, items: options('layout', ['list', 'dock']) },
-      { id: 'apps', title: 'App display', horizontal: true, items: options('apps', ['text', 'icons', 'both']) },
-      { id: 'controls', title: 'Home controls', horizontal: true, items: options('controls', ['text', 'icons', 'both']) }
+      { id: 'layout', title: translate('Layout'), horizontal: true, items: options('layout', ['list', 'dock']) },
+      { id: 'apps', title: translate('App display'), horizontal: true, items: options('apps', ['text', 'icons', 'both']) },
+      { id: 'controls', title: translate('Home controls'), horizontal: true, items: options('controls', ['text', 'icons', 'both']) },
+      { id: 'controlsPosition', title: translate('Controls position'), horizontal: true, items: options('controlsPosition', ['auto', 'top', 'bottom']) }
     ];
     if (t.group === 'typography') return [{ id: 'font', title: '', items: options('font', LOOK_VALUES.font) }];
     if (t.group === 'focus') return [
-      { id: 'focus', title: 'Focus style', horizontal: true, items: options('focus', ['type', 'glass']) },
-      { id: 'material', title: 'Material', horizontal: true, items: options('material', ['soft', 'frost', 'tint'], inactive),
-        reason: inactive ? flat ? 'Materials are available with a Photo background.' : 'Choose Glass focus or the Dock layout to use materials.' : '' }
+      { id: 'focus', title: translate('Focus style'), horizontal: true, items: options('focus', ['type', 'glass']) },
+      { id: 'material', title: translate('Material'), horizontal: true, items: options('material', ['soft', 'frost', 'tint'], inactive),
+        reason: inactive ? flat ? translate('Materials are available with a Photo background.') : translate('Choose Glass focus or the Dock layout to use materials.') : '' }
     ];
     if (t.group === 'rotation') return [{ id: 'mode', title: '', items: options('mode', MODES.map(function (m) { return m.id; }), flat),
-      reason: flat ? 'Choose Photo in Background to use rotation.' : 'Timed changes pause while Settings or another panel is open.' }];
+      reason: flat ? translate('Choose Photo in Background to use rotation.') : translate('Timed changes pause while Settings or another panel is open.') }];
     return [{ id: 'samsung', title: '', items: [
-      { action: 'samsung.home', label: 'Samsung Home', description: 'Open Samsung’s Home screen' },
-      { action: 'samsung.settings', label: 'TV settings', description: 'Picture, sound and network settings' }
+      { action: 'samsung.home', label: ORIGINAL_HOME, description: ANDROID ? translate('Open original Home or its activation settings') : translate('Open Samsung’s Home screen') },
+      { action: 'samsung.settings', label: translate('TV settings'), description: translate('Picture, sound and network settings') }
     ] }];
   }
+  function detailParentName() { var parent = S.stack[S.stack.length - 2]; return parent && parent.id === 'appearance' ? translate(DETAIL_NAMES[parent.group]) : translate('Settings'); }
   function detailRows(t) {
-    var rows = [[{ action: 'settings.back', label: t.group === 'rotation' ? 'Background' : 'Settings' }]];
+    var rows = [[{ action: 'settings.back', label: detailParentName() }]];
     detailSections(t).forEach(function (section) {
       var enabled = section.items.filter(function (item) { return !item.disabled; });
       if (section.horizontal && enabled.length) rows.push(enabled);
       else enabled.forEach(function (item) { rows.push([item]); });
     });
-    if (S.lookError) rows.push([{ action: 'settings.retry', label: 'Try again' }]);
+    if (S.lookError) rows.push([{ action: 'settings.retry', label: translate('Try again') }]);
     return rows;
   }
   function detailLocation(t) {
@@ -902,6 +993,13 @@
     if (!write(c, 'Wallpaper rotation')) S.lookError = { type: 'save', patch: { mode: value }, row: 'mode', transient: false };
   }
   function detailBack() { cancelLook(); S.err = null; pop(); }
+  function applyHomeOption(axis, value) {
+    S.err = null; S.lookError = null;
+    if (S.c[axis] === value) return;
+    var c = next(S.c.home.slice(), S.c.recent.slice()), patch = {};
+    c[axis] = value; patch[axis] = value;
+    if (!write(c, axis)) S.lookError = { type: 'save', patch: patch, row: axis };
+  }
   function detailOk(t, item) {
     var patch = {}, error = S.lookError;
     if (item.action === 'settings.back') { detailBack(); return; }
@@ -909,18 +1007,26 @@
     if (item.action === 'settings.retry') {
       if (error && error.patch[error.row] !== undefined) detailFocus(t, choice(error.row, error.patch[error.row]), 0);
       if (error && error.row === 'mode') applyRotation(error.patch.mode);
+      else if (error && HOME_OPTIONS.indexOf(error.row) >= 0) applyHomeOption(error.row, error.patch[error.row]);
       else if (error) setLook(error.patch, { row: error.row });
     } else if (item.axis === 'mode') applyRotation(item.value);
+    else if (HOME_OPTIONS.indexOf(item.axis) >= 0) applyHomeOption(item.axis, item.value);
     else if (item.axis) { patch[item.axis] = item.value; setLook(patch, { row: item.axis }); }
+    else if (item.action.indexOf('addon.') === 0) { var parts = item.action.split('.'); if (parts[1] === 'remove') push({ id: 'message', msg: 'addonRemove', addonId: parts[2], content: { title: translate('Uninstall add-on?'), line: translate('The widget is removed. Saved account and appearance settings are retained.'), actions: [['back', translate('Cancel')], ['addonRemove', translate('Uninstall')]] }, f: { b: 0 } }); else ADDONS.request(parts[1], parts[2]); }
+    else if (item.action.indexOf('group.') === 0) { if (item.action === 'group.editor') openEditor('settings'); else openAppearance(item.action.substring(6)); }
     else if (item.action === 'background.wallpaper') openWallpaper();
     else if (item.action === 'background.rotation') openAppearance('rotation');
-    else if (item.action === 'samsung.home') perform('Samsung Home', FrameDevice.home);
-    else if (item.action === 'samsung.settings') perform('TV settings', FrameDevice.settings);
+    else if (item.action === 'samsung.home') perform(ORIGINAL_HOME, FrameDevice.home);
+    else if (item.action === 'samsung.settings') perform(translate('TV settings'), FrameDevice.settings);
+    else if (item.action === 'spotify.access') perform(translate('Media access'), FrameDevice.spotify.access);
+    else if (item.action === 'spotify.signin') perform(translate('Spotify account'), function (done) { FrameDevice.spotify.signIn(S.c.language, done); });
+    else if (item.action === 'spotify.signout') push({ id: 'message', msg: 'signout', content: { title: translate('Sign out of Spotify?'), line: translate('Disconnect your Spotify account from CleanFrame.'), note: translate('The Spotify app stays signed in and music keeps playing.'), actions: [['back', translate('Cancel')], ['signout', translate('Sign out')]] }, f: { b: 0 } });
+    else if (item.action === 'spotify.open') perform('Spotify', function (done) { FrameDevice.launchApp('com.spotify.tv.android', done); });
   }
   V.appearance = {
     norm: function (t) {
       var rows = detailRows(t), exists = false, applied = null;
-      var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', rotation: 'mode' }[t.group];
+      var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', rotation: 'mode', clock: 'dateVisible', spotify: 'spotifyEnabled', language: 'language' }[t.group];
       rows.forEach(function (items) { items.forEach(function (item) {
         if (item.action === t.f.action) exists = true;
         if (item.axis === axis && item.value === S.c[axis]) applied = item;
@@ -932,6 +1038,7 @@
       var at = detailLocation(t), row = at.row, column = at.column;
       if (k === 'back') { detailBack(); return; }
       if (k === 'ok') { detailOk(t, at.item); return; }
+      if (at.item.action === 'spotify.transparency' && (k === 'left' || k === 'right')) { applyHomeOption('spotifyTransparency', clamp(S.c.spotifyTransparency + (k === 'right' ? 5 : -5), 0, 100)); return; }
       if (k === 'up' || k === 'down') {
         row = clamp(row + (k === 'up' ? -1 : 1), 0, at.rows.length - 1);
         column = Math.min(t.f.column || 0, at.rows[row].length - 1);
@@ -949,7 +1056,7 @@
       }); });
     }
   };
-  function messageContent(t) { return t.content || MSG[t.msg]; }
+  function messageContent(t) { if (t.msg === 'leave') return { title: translate('Leave Home?'), line: translate('Open ') + translate(ORIGINAL_HOME) + '?', note: '', actions: [['stay', translate('Stay')], ['samsung', translate(ORIGINAL_HOME)]] }; return t.content || MSG[t.msg]; }
   V.message = {
     sheet: true,
     key: function (t, k) {
@@ -957,7 +1064,7 @@
       if (k === 'left') t.f.b = Math.max(0, t.f.b - 1);
       else if (k === 'right') t.f.b = Math.min(A.length - 1, t.f.b + 1);
       else if (k === 'back') pop();
-      else if (k === 'ok') { a = A[t.f.b][0]; pop(); if (a === 'samsung') perform('Samsung Home', FrameDevice.home); }
+      else if (k === 'ok') { a = A[t.f.b][0]; pop(); if (a === 'samsung') perform(ORIGINAL_HOME, FrameDevice.home); else if (a === 'addonRemove') ADDONS.request('remove', t.addonId); else if (a === 'signout') perform(translate('Spotify account'), FrameDevice.spotify.signOut); }
     },
     point: function (t, z, i) { if (z === 'act') { t.f.b = i; this.key(t, 'ok'); } }
   };
@@ -967,7 +1074,12 @@
   function press(k) {
     norm();
     var t = top();
-    V[t.id].key(t, k);
+    // OK first reveals hidden controls; it never fires an invisible transport button.
+    var spatial = ['left', 'right', 'up', 'down'].indexOf(k) >= 0 && !t.lifted
+      && !(t.id === 'appearance' && t.f.action === 'spotify.transparency' && (k === 'left' || k === 'right'));
+    var moved = spatial && window.CleanFrameDesign && window.CleanFrameDesign.navigate(k, focusedAction(), focusElement);
+    if (!moved && !(t.id === 'home' && t.f.zone === 'spotify' && !spotifyAwake && k === 'ok')) V[t.id].key(t, k);
+    spotifyActivity();
     norm();
     render();
     syncRotation();
@@ -976,6 +1088,7 @@
   /* ---------- Rendering ---------- */
   var $ = function (id) { return document.getElementById(id); };
   var stage = $('stage'), homeEl = $('home'), caption = $('caption'), utilsEl = $('utils');
+  var spotifyEl = $('spotifyPlayer'), spotifyControls = $('spotifyControls');
   var utilFocusLabel = $('utilFocusLabel'), utilFocusKey = '', appFocusName = $('appFocusName');
   var dock = $('dock'), shelf = $('shelf'), track = $('track'), plate = $('plate'), matScrim = $('matScrim'), dockEmpty = $('dockEmpty');
   var cueL = $('cueL'), cueR = $('cueR'), dockAction = $('dockAction');
@@ -1016,9 +1129,13 @@
     }).join('');
   }
   function render() {
+    if (window.CleanFrameDesign) window.CleanFrameDesign.before();
+    document.documentElement.lang = S.c.language;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-label]'), function (el) { el.setAttribute('aria-label', translate(el.getAttribute('data-i18n-label'))); });
+    if (top().id === 'home') V.home.norm(top());
     var t = top(), sheet = !!V[t.id].sheet, shown = wall(S.shown ? S.shown.wall : S.c.wall), palette = ADAPTIVE_INK[shown.id];
     var adaptive = applyAdaptiveInk(palette), tr = adaptive && palette.tr ? palette.tr.pol : shown.ut.tr, br = adaptive && palette.br ? palette.br.pol : shown.ut.br;
-    stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '');
+    stage.className = (ANDROID ? 'stage is-android bg-' : 'stage bg-') + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '') + (spotifyVisible() ? ' has-spotify' : '') + (spotifyExpanded() ? ' spotify-focused' : '') + ' cp-' + S.c.controlsPosition + (utilsStacked() ? ' util-stacked' : '') + (utilsTop() ? ' util-at-top' : ' util-at-bottom');
     if (!adaptive && shown.clockInk) stage.style.setProperty('--clock-ink', shown.clockInk);
     else stage.style.removeProperty('--clock-ink');
     if (!adaptive && shown.dockClockInk) stage.style.setProperty('--dock-clock-ink', shown.dockClockInk);
@@ -1028,6 +1145,10 @@
     renderSheet(t, sheet);
     renderAppearance(t);
     renderFocusStatus(t);
+    renderSpotify();
+    ADDONS.render(t.id === 'home' && !spotifyExpanded(), S.c.language);
+    syncSpotify();
+    if (window.CleanFrameDesign) window.CleanFrameDesign.after({ view: t.id === 'appearance' ? 'appearance.' + t.group : t.id === 'message' ? 'message.' + t.msg : t.id, layout: S.c.layout, state: spotifyExpanded() ? 'expanded' : 'compact' });
   }
 
   function applyHomeFont() {
@@ -1064,10 +1185,135 @@
     if (!metrics || !metrics.digitCell) return text;
     return text.replace(/[0-9]/g, function (digit) { return '<span class="clock-digit">' + digit + '</span>'; });
   }
+  function dateText() {
+    var formatter = new window.Intl.DateTimeFormat(S.c.language === 'de' ? 'de-DE' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'long' });
+    if (S.c.language !== 'de') return formatter.format(new Date());
+    return formatter.formatToParts(new Date()).filter(function (part) { return part.type !== 'literal'; }).map(function (part) {
+      return part.value + (part.type === 'day' ? '.' : '');
+    }).join(' ');
+  }
   function renderCaption(t, hs) {
     var html = '<span class="clock">' + clockHtml() + '</span>';
+    if (S.c.dateVisible) html += '<span class="clock-date">' + esc(dateText()) + '</span>';
     if (S.c.apps !== 'icons' && hs.items[hs.i] && (S.c.layout === 'list' ? photoLabel(hs.items[hs.i].id, false).size < 88 || photoLabel(hs.items[hs.i].id, false).ellipsis : hs.zone === 'apps' && reducedDockLabel(hs.items[hs.i].id))) html += '<span class="cap-line full-name">' + esc(app(hs.items[hs.i].id).name) + '</span>';
     setHTML(caption, html);
+  }
+
+  /* Spotify controls persist in the DOM; track updates never move remote focus. */
+  function spotifyVisible() { return !!(SPOTIFY && ADDONS.enabled('spotify') && S.c && S.c.spotifyEnabled && S.stack && (top().id === 'home' || top().id === 'appearance' && top().group === 'spotify') && !document.hidden && (spotifyState.status === 'playing' || spotifyState.status === 'paused') && spotifyState.title); }
+  function spotifyExpanded() { return spotifyVisible() && top().f.zone === 'spotify' && spotifyAwake; }
+  function spotifyActivity() {
+    clearTimeout(spotifyIdleTimer); spotifyIdleTimer = 0;
+    spotifyAwake = !!(spotifyVisible() && top().id === 'home' && top().f.zone === 'spotify');
+    if (spotifyAwake) spotifyIdleTimer = setTimeout(function () {
+      spotifyAwake = false; spotifyIdleTimer = 0;
+      render();
+    }, 2500);
+  }
+  function spotifyStatus() {
+    if (!spotifyState.permission) return translate('Android grants access for all apps. CleanFrame only uses Spotify media information.');
+    if (spotifyState.errorMessage) return spotifyState.errorMessage;
+    if (spotifyState.webApi === 'unlinked') return translate('Sign in with QR to enable controls.');
+    if (spotifyState.connection === 'unavailable') return translate('Spotify could not connect. Open Spotify once, then return Home.');
+    return spotifyState.status === 'playing' || spotifyState.status === 'paused' ? spotifyState.webApi === 'connected' ? translate('Spotify connected. Controls use your active device.') : translate('Connected to your Spotify session.') : translate('Ready. Start Spotify on a device using the same account.');
+  }
+  function spotifyKey(t, key) {
+    var f = t.f, index = f.p === undefined ? 1 : f.p, direction, candidate;
+    if (key === 'back' || key === 'up' && index === 3 || S.c.layout === 'list' && key === 'left' && index === 0) f.zone = 'apps';
+    else if (key === 'up') f.p = 3;
+    else if (index === 3) {
+      if (key === 'down' || key === 'left') f.p = 1;
+      else if (key === 'right') { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, utils().length - 1); }
+      else if (key === 'ok') perform('Spotify', function (done) { FrameDevice.launchApp('com.spotify.tv.android', done); });
+    }
+    else if (key === 'right' && index === 2) { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, utils().length - 1); }
+    else if (key === 'left' || key === 'right') {
+      direction = key === 'left' ? -1 : 1; candidate = index + direction;
+      while (candidate >= 0 && candidate < 3) {
+        if (spotifyState.actions && spotifyState.actions[spotifyCommands[candidate]]) { f.p = candidate; break; }
+        candidate += direction;
+      }
+    } else if (key === 'ok' && spotifyState.actions && spotifyState.actions[spotifyCommands[index]]) {
+      FrameDevice.spotify.control(spotifyCommands[index], function (error) {
+        if (error) { spotifyState.errorMessage = error.message; renderSpotify(); }
+      });
+    }
+  }
+  function mediaTime(milliseconds) {
+    var seconds = Math.floor(Math.max(0, milliseconds || 0) / 1000);
+    return Math.floor(seconds / 60) + ':' + (seconds % 60 < 10 ? '0' : '') + seconds % 60;
+  }
+  function spotifyProgress() {
+    clearTimeout(spotifyTimer); spotifyTimer = 0;
+    if (!spotifyVisible()) return;
+    var duration = Number(spotifyState.duration) || 0, position = Number(spotifyState.position) || 0;
+    if (spotifyState.status === 'playing') position += (window.performance.now() - spotifyAt) * (Number(spotifyState.speed) || 1);
+    position = Math.max(0, duration > 0 ? Math.min(position, duration) : position);
+    var percent = duration > 0 ? Math.min(100, position / duration * 100) : 0;
+    $('spotifyProgressFill').style.transform = 'scaleX(' + percent / 100 + ')';
+    $('spotifyCompactProgressFill').style.transform = 'scaleX(' + percent / 100 + ')';
+    $('spotifyProgress').setAttribute('aria-valuenow', Math.round(percent));
+    $('spotifyPosition').textContent = mediaTime(position);
+    $('spotifyDuration').textContent = duration ? mediaTime(duration) : '';
+    if (spotifyState.status === 'playing') spotifyTimer = setTimeout(spotifyProgress, 1000);
+  }
+  function renderSpotify() {
+    var visible = spotifyVisible(), expanded = spotifyExpanded(), t = top(), art = typeof spotifyState.art === 'string' && /^\/media\/spotify-[0-9]+\.png$/.test(spotifyState.art) ? spotifyState.art : '';
+    if (!visible || t.id !== 'home' || t.f.zone !== 'spotify') { clearTimeout(spotifyIdleTimer); spotifyIdleTimer = 0; spotifyAwake = false; expanded = false; }
+    var surface = S.c.spotifySurface, colour = /^#[0-9a-f]{6}$/i.test(spotifyState.artColor || '') ? spotifyState.artColor : '#272727';
+    var backdrop = wall(S.shown ? S.shown.wall : S.c.wall), palette = ADAPTIVE_INK[backdrop.id];
+    var backdropInk = palette && palette.br ? palette.br.pol : backdrop.ut.br;
+    spotifyEl.style.setProperty('--spotify-surface', surface === 'light' ? '#f4f4f1' : surface === 'cover' ? colour : '#131209');
+    spotifyEl.style.setProperty('--spotify-opacity', String(1 - S.c.spotifyTransparency / 100));
+    // Opaque cards use their surface ink; transparent cards reuse the prepared backdrop ink.
+    spotifyEl.classList.toggle('is-light', S.c.spotifyTransparency <= 40 ? surface === 'light' || surface === 'cover' && spotifyState.artLight : S.c.bg === 'light' || S.c.bg === 'photo' && /^dark/.test(backdropInk));
+    spotifyEl.style.textShadow = S.c.bg === 'photo' && palette && palette.br ? palette.br.shadow : 'none';
+    spotifyEl.hidden = !visible;
+    stage.classList.toggle('has-spotify', visible);
+    stage.classList.toggle('spotify-focused', !!expanded);
+    spotifyEl.classList.toggle('is-expanded', !!expanded);
+    $('spotifyExpanded').setAttribute('aria-hidden', !expanded);
+    $('spotifyCompact').setAttribute('aria-hidden', !!expanded);
+    $('spotifyCompact').classList.toggle('is-focus', !!visible && t.f.zone === 'spotify' && !expanded);
+    if (!visible) { clearTimeout(spotifyTimer); spotifyTimer = 0; return; }
+    $('spotifyTitle').textContent = spotifyState.title || '';
+    $('spotifyArtist').textContent = spotifyState.artist || '';
+    $('spotifyCompactTitle').textContent = spotifyState.title || '';
+    $('spotifyCompactArtist').textContent = spotifyState.artist || '';
+    $('spotifySource').textContent = spotifyState.deviceName || '';
+    $('spotifySource').hidden = !!spotifyState.errorMessage || !spotifyState.deviceName;
+    ['spotify', 'spotifyCompact'].forEach(function (prefix) {
+      var cover = $(prefix + 'Cover');
+      if (cover.getAttribute('src') !== art) { cover.hidden = !art; $(prefix + 'Fallback').hidden = !!art; if (art) cover.setAttribute('src', art); else cover.removeAttribute('src'); }
+    });
+    $('spotifyError').hidden = !spotifyState.errorMessage;
+    $('spotifyError').textContent = translate(spotifyState.errorMessage || '');
+    $('spotifyOpen').classList.toggle('is-focus', !!expanded && t.f.p === 3);
+    Array.prototype.forEach.call(spotifyControls.children, function (button, index) {
+      var label = index === 0 ? translate('Previous track') : index === 2 ? translate('Next track') : spotifyState.status === 'playing' ? translate('Pause') : translate('Play');
+      var supported = !!(spotifyState.actions && spotifyState.actions[spotifyCommands[index]]);
+      button.className = 'spotify-button' + (expanded && t.f.p === index ? ' is-focus' : '') + (!supported ? ' is-disabled' : '');
+      button.setAttribute('aria-label', label); button.setAttribute('aria-disabled', !supported);
+      setHTML(button, icon(index === 1 ? spotifyState.status === 'playing' ? 'pause' : 'play' : spotifyCommands[index]));
+    });
+    spotifyProgress();
+  }
+  function receiveSpotify(value) {
+    spotifyState = value && typeof value === 'object' ? value : { status: 'unavailable' };
+    spotifyAt = window.performance.now();
+    if (S.c) {
+      if (top().id === 'appearance' && top().group === 'spotify' && top().f.action === 'spotify.signout' && spotifyState.webApi === 'unlinked') top().f.action = 'spotify.signin';
+      norm(); render();
+    }
+  }
+  function syncSpotify() {
+    if (!SPOTIFY) return;
+    var t = top(), observe = !!(ADDONS.enabled('spotify') && S.c.spotifyEnabled && !document.hidden && (t.id === 'home' || t.id === 'appearance' && t.group === 'spotify'));
+    if (observe === spotifyObserving) return;
+    spotifyObserving = observe;
+    FrameDevice.spotify.observe(observe, function (error) {
+      if (error) { spotifyState = { status: 'unavailable', errorMessage: error.message }; renderSpotify(); }
+    });
   }
 
   function utilBtn(z, i, action, inner, extra, name) {
@@ -1077,7 +1323,7 @@
     var html = '', style = hs.mode === 'arrange' && S.c.controls !== 'text' ? 'both' : S.c.controls;
     var iconsOnly = style === 'icons', U = utils(), focused = null;
     utilsEl.className = 'utils quiet-utils is-' + style + (hs.zone === 'util' || hs.zone === 'ctl' ? ' is-awake' : '');
-    U.forEach(function (u, i) { html += utilBtn('util', i, 'util.' + u, icon(UTIL[u][1], '', true) + '<span class="u-label">' + UTIL[u][0] + '</span>', '', UTIL[u][0]); });
+    U.forEach(function (u, i) { html += utilBtn('util', i, 'util.' + u, icon(UTIL[u][1], '', true) + '<span class="u-label">' + translate(UTIL[u][0]) + '</span>', '', translate(UTIL[u][0])); });
     setHTML(utilsEl, html);
     Array.prototype.forEach.call(utilsEl.querySelectorAll('.u'), function (b) {
       var z = b.getAttribute('data-z'), focus = hs.zone === z && hs.u === Number(b.getAttribute('data-i'));
@@ -1090,7 +1336,7 @@
   function renderUtilFocusLabel(button) {
     var text, key, r, sr, scale, width, x;
     if (!button) { utilFocusLabel.className = 'util-focus-label'; utilFocusKey = ''; return; }
-    text = S.err ? 'Not saved. OK tries again.' : button.getAttribute('aria-label');
+    text = S.err ? translate('Not saved. OK tries again.') : button.getAttribute('aria-label');
     key = button.getAttribute('data-action') + '|' + text + '|' + homeFont();
     if (key !== utilFocusKey) {
       utilFocusLabel.className = 'util-focus-label'; utilFocusLabel.textContent = text;
@@ -1099,9 +1345,9 @@
     }
     r = button.getBoundingClientRect(); sr = sceneEl.getBoundingClientRect(); scale = sr.width / 1920 || 1;
     width = Math.ceil(textWidth(text, 28, 500, -.2) + 8); x = (r.left + r.width / 2 - sr.left) / scale - width / 2;
-    if (S.c.layout === 'list') x = 1730 - width;
+    if (utilsStacked()) x = (r.left - sr.left) / scale - 4 - width;
     utilFocusLabel.style.width = width + 'px'; utilFocusLabel.style.left = clamp(x, 112, 1808 - width) + 'px';
-    utilFocusLabel.style.top = ((S.c.layout === 'list' ? (r.top + r.height / 2 - sr.top) / scale - 19 : 140) + fontShift('ui', 28)) + 'px';
+    utilFocusLabel.style.top = ((utilsStacked() ? (r.top + r.height / 2 - sr.top) / scale - 19 : 140) + fontShift('ui', 28)) + 'px';
     utilFocusLabel.className = 'util-focus-label is-on';
   }
   function renderUtilityLens(button, iconsOnly) {
@@ -1144,7 +1390,7 @@
       x = 280; placement = phFields[photoPlateIndex]._placement;
       y = placement.y + placement.height / 2 - 24;
     } else {
-      x = clamp(dockAnchorCenter - width / 2, 140, 1780 - width); y = 932;
+      x = clamp(dockAnchorCenter - width / 2, 140, 1780 - width); y = spotifyVisible() ? dockGeom(S.c.home.length).y - 64 : 932;
     }
     appFocusName.style.left = x + 'px'; appFocusName.style.top = (y + fontShift('primary', S.c.layout === 'list' ? 40 : 36)) + 'px';
     appFocusName.className = 'app-focus-name is-on';
@@ -1177,7 +1423,7 @@
   }
   function dockTileHtml(it, full) {
     var a, body;
-    if (it.kind === 'add') return '<span class="add">' + icon('plus') + '</span><span class="label">' + (full ? 'Home is full' : 'Add app') + '</span>';
+    if (it.kind === 'add') return '<span class="add">' + icon('plus') + '</span><span class="label">' + (full ? translate('Home is full') : translate('Add app')) + '</span>';
     a = app(it.id);
     body = S.c.apps === 'text' ? '' : appMark(a, S.c.apps === 'icons' ? 136 : 120, S.c.apps === 'icons' ? 88 : 72, S.c.apps === 'icons' ? 72 : 58);
     return body + (S.c.apps === 'icons' ? '' : '<span class="label" style="font-size:' + dockLabelSize(a.id) + 'px;top:' + ((S.c.apps === 'text' ? 28 : 128) + fontShift('primary', dockLabelSize(a.id))) + 'px"><span class="label-ink">' + esc(a.name) + '</span></span>') + '<span class="nudge nudge-l">' + icon('left') + '</span><span class="nudge nudge-r">' + icon('right') + '</span>';
@@ -1205,7 +1451,7 @@
     var items = hs.items, n = items.length, empty = hs.mode !== 'arrange' && !n, g = dockGeom(empty ? -1 : n);
     var anchor = clamp(hs.i, 0, Math.max(0, n - 1)), off = empty ? 0 : dockOffset(n, anchor, g);
     var full = false, ns = n;
-    var tileFocus = hs.zone === 'apps' || hs.zone === 'tiles', tileSel = hs.zone === 'util' || hs.zone === 'act' || hs.zone === 'ctl' || hs.zone === 'preview';
+    var tileFocus = hs.zone === 'apps' || hs.zone === 'tiles', tileSel = hs.zone === 'spotify' || hs.zone === 'util' || hs.zone === 'act' || hs.zone === 'ctl' || hs.zone === 'preview';
     var focusItem = items[anchor], s, ax, label, width;
 
     dock.className = 'dock' + (empty ? ' is-empty' : '');
@@ -1213,9 +1459,10 @@
     dock.style.setProperty('--tile-w', g.tw + 'px'); dock.style.setProperty('--tile-h', g.th + 'px'); dock.style.setProperty('--dock-h', g.h + 'px');
     dock.style.setProperty('--nudge-top', ((g.th - 48) / 2) + 'px');
     dockAnchorCenter = g.x + 16 + anchor * g.pitch - off + g.tw / 2;
-    IMG.mat.style.left = (-g.x) + 'px'; IMG.mat.style.top = (-g.y) + 'px';
+    var materialY = g.y - (spotifyExpanded() ? 216 : 0);
+    IMG.mat.style.left = (-g.x) + 'px'; IMG.mat.style.top = (-materialY) + 'px';
     IMG.mat.style.transformOrigin = '960px ' + (g.y + g.h / 2) + 'px';
-    matScrim.style.left = (-g.x) + 'px'; matScrim.style.top = (SCRIM_Y - g.y) + 'px';
+    matScrim.style.left = (-g.x) + 'px'; matScrim.style.top = (SCRIM_Y - materialY) + 'px';
     matScrim.style.transformOrigin = '960px ' + (g.y + g.h / 2 - SCRIM_Y) + 'px';
     shelf.style.width = g.shelf + 'px';
     shelf.className = 'shelf' + (g.broad && off > 0 ? ' fade-l' : '') + (g.broad && off + g.shelf < n * g.pitch - 8 ? ' fade-r' : '');
@@ -1250,9 +1497,9 @@
     ax = g.x + 16 + anchor * g.pitch - off;
     if (hs.mode === 'arrange' && !hs.lifted && (hs.zone === 'tiles' || hs.zone === 'act') && focusItem && focusItem.kind !== 'add') {
       s = hs.arr.slots[anchor];
-      label = (s.removed ? 'Restore ' : 'Remove ') + app(s.id).name; width = actionWidth(label);
+      label = (s.removed ? translate('Restore ') : translate('Remove ')) + app(s.id).name; width = actionWidth(label);
       ax = clamp(ax + (g.tw - width) / 2, 112, 1808 - width);
-      setHTML(dockAction, '<span>' + esc(label) + '</span>');
+      setHTML(dockAction, '<span>' + esc(translate(label)) + '</span>');
       dockAction.className = 'dock-action is-on' + (hs.zone === 'act' ? ' is-focus' : '');
       dockAction.style.width = width + 'px';
       dockAction.style.transform = 'translate3d(' + ax + 'px,0,0)';
@@ -1261,7 +1508,7 @@
       dockAction.className = 'dock-action';
       dockAction.removeAttribute('data-z'); dockAction.removeAttribute('data-action');
     }
-    setHTML(dockEmpty, empty ? '<p>No apps on Home</p><button type="button" tabindex="-1" class="btn' + (hs.zone === 'empty' ? ' is-focus' : '') + '" data-z="empty" data-i="0" data-action="home.add-apps">' + icon('plus') + '<span>Add apps</span></button>' : '');
+    setHTML(dockEmpty, empty ? "<p>" + translate("No apps on Home") + "</p><button type=\"button\" tabindex=\"-1\" class=\"btn" + (hs.zone === 'empty' ? ' is-focus' : '') + '" data-z="empty" data-i="0" data-action="home.add-apps">' + icon('plus') + "<span>" + translate("Add apps") + "</span></button>" : '');
   }
 
   function photoModeTransition(compact) {
@@ -1307,7 +1554,7 @@
   function renderList(hs) {
     var items = hs.items, n = items.length, compact = hs.mode === 'arrange', pitch = compact ? PH_COMPACT_PITCH : PH_PITCH;
     var anchor = clamp(hs.i, 0, Math.max(0, n - 1)), first, off, width, slot, y, s, label, aw, plateState;
-    var rowFocus = hs.zone === 'apps' || hs.zone === 'tiles', remembered = hs.zone === 'util' || hs.zone === 'act' || hs.zone === 'ctl' || hs.zone === 'preview';
+    var rowFocus = hs.zone === 'apps' || hs.zone === 'tiles', remembered = hs.zone === 'spotify' || hs.zone === 'util' || hs.zone === 'act' || hs.zone === 'ctl' || hs.zone === 'preview';
     photoModeTransition(compact);
     if (compact) {
       first = clamp(scroll.photoArrange, anchor - 7, anchor - 1);
@@ -1348,15 +1595,15 @@
     plateState = !n || hs.zone === null ? '' : hs.lifted ? 'on-lift' : S.c.focus === 'glass' && rowFocus ? 'on-focus' : S.c.focus === 'glass' && remembered ? 'on-sel' : '';
     renderPhotoPlate(items[anchor] ? items[anchor].id : '', width, compact ? 88 : 134, y, plateState);
     if (compact && !hs.lifted && (hs.zone === 'tiles' || hs.zone === 'act') && items[anchor]) {
-      s = hs.arr.slots[anchor]; label = (s.removed ? 'Restore ' : 'Remove ') + app(s.id).name; aw = actionWidth(label);
-      setHTML(phAction, '<span>' + esc(label) + '</span>');
+      s = hs.arr.slots[anchor]; label = (s.removed ? translate('Restore ') : translate('Remove ')) + app(s.id).name; aw = actionWidth(label);
+      setHTML(phAction, '<span>' + esc(translate(label)) + '</span>');
       phAction.className = 'ph-action is-on' + (hs.zone === 'act' ? ' is-focus' : '');
       phAction.style.width = aw + 'px';
       phAction.style.transform = 'translate3d(' + (112 + width + 24) + 'px,' + (PH_COMPACT_TOP + slot * pitch + 12) + 'px,0)';
       attrs(phAction, 'act', anchor, 'arrange.' + (s.removed ? 'restore.' : 'remove.') + s.id);
     } else { phAction.className = 'ph-action'; phAction.removeAttribute('data-z'); phAction.removeAttribute('data-action'); }
     phEmpty.className = 'ph-empty' + (!compact && !n ? ' is-on' : '');
-    setHTML(phEmpty, !compact && !n ? '<p>No apps on Home</p><button type="button" tabindex="-1" class="btn' + (hs.zone === 'empty' ? ' is-focus' : '') + '" data-z="empty" data-i="0" data-action="home.add-apps">' + icon('plus') + '<span>Add apps</span></button>' : '');
+    setHTML(phEmpty, !compact && !n ? "<p>" + translate("No apps on Home") + "</p><button type=\"button\" tabindex=\"-1\" class=\"btn" + (hs.zone === 'empty' ? ' is-focus' : '') + '" data-z="empty" data-i="0" data-action="home.add-apps">' + icon('plus') + "<span>" + translate("Add apps") + "</span></button>" : '');
   }
 
   /* Sheets: a frame is built once per view/mode; fill() updates its slots. Persistent
@@ -1369,7 +1616,7 @@
     else sheetView.removeAttribute('aria-modal');
     sceneEl.setAttribute('aria-hidden', sheet || isSettingsDetail(t) ? 'true' : 'false');
     if (!sheet) { sheetView.innerHTML = ''; sheetKey = ''; return; }
-    key = t.id + '|' + (t.mode || '') + '|' + (t.msg || '') + '|' + S.variant + '|' + S.c.bg;
+    key = t.id + '|' + (t.mode || '') + '|' + (t.msg || '') + '|' + S.variant + '|' + S.c.bg + '|' + S.c.language;
     if (key !== sheetKey) {
       sheetView.innerHTML = FRAMES[t.id](t);
       sheetKey = key; slotEls = {};
@@ -1385,56 +1632,67 @@
     V.appearance.norm(t);
     appearanceEl.className = 'appearance detail-' + t.group;
     appearanceRows.className = 'appearance-rows';
-    appearanceTitle.textContent = DETAIL_NAMES[t.group];
+    appearanceTitle.textContent = translate(DETAIL_NAMES[t.group]);
     var at = detailLocation(t), selected = at.item, error = S.lookError, status = '', hint;
     function command(item, inner, cls) {
       var applied = item.axis && S.c[item.axis] === item.value;
       var loading = !!(item.axis && S.pending && S.pending.target[item.axis] === item.value && S.pending.row === item.axis);
       return '<button type="button" tabindex="-1" class="setting-choice' + (cls ? ' ' + cls : '') + (t.f.action === item.action ? ' is-focus' : '') + (item.disabled ? ' is-disabled' : '') + (applied ? ' is-applied' : '') + (loading ? ' is-loading' : '') + '"'
-        + (item.axis ? ' role="radio" aria-checked="' + !!applied + '"' : '') + ' aria-label="' + esc(item.axis && item.value === 'both' ? 'Icons and text' : item.label) + '" aria-disabled="' + !!item.disabled + '" aria-busy="' + loading + '"'
+        + (item.axis ? ' role="radio" aria-checked="' + !!applied + '"' : '') + ' aria-label="' + esc(item.axis && item.value === 'both' ? translate('Icons and text') : translate(item.label)) + '" aria-disabled="' + !!item.disabled + '" aria-busy="' + loading + '"'
         + ' data-z="detail" data-i="0" data-id="' + item.action + '" data-action="' + item.action + '">' + inner
         + (item.axis ? '<span class="setting-tick" aria-hidden="true">' + (applied ? icon('check') : '') + '</span>' : '') + '</button>';
     }
-    setHTML(appearanceBack, command({ action: 'settings.back', label: t.group === 'rotation' ? 'Background' : 'Settings' }, icon('left') + '<span>' + (t.group === 'rotation' ? 'Background' : 'Settings') + '</span>', 'setting-back'));
+    setHTML(appearanceBack, command({ action: 'settings.back', label: detailParentName() }, icon('left') + '<span>' + (detailParentName()) + '</span>', 'setting-back'));
     setHTML(appearanceRows, detailSections(t).map(function (section) {
+      if (section.slider) return '<section class="setting-section section-spotifyTransparency"><h3 class="setting-label">' + translate(section.title) + '</h3>'
+        + '<div class="setting-slider' + (t.f.action === 'spotify.transparency' ? ' is-selected' : '') + '"><input class="' + (t.f.action === 'spotify.transparency' ? 'is-focus' : '') + '" type="range" min="0" max="100" step="5" tabindex="-1" aria-label="' + translate('Transparency') + '" data-z="detail" data-i="0" data-id="spotify.transparency" data-action="spotify.transparency"><output></output></div>'
+        + '<p class="setting-reason">' + translate('0% solid · 100% transparent') + '</p></section>';
       return '<section class="setting-section' + (section.horizontal ? ' is-horizontal' : '') + ' section-' + section.id + '">'
-        + (section.title ? '<h3 class="setting-label" id="setting-' + section.id + '">' + section.title + '</h3>' : '')
-        + '<div class="setting-options"' + (section.items[0].axis ? ' role="radiogroup" aria-label="' + esc(section.title || LOOK_NAMES[section.id] || DETAIL_NAMES[t.group]) + '"' : '') + '>'
+        + (section.title ? '<h3 class="setting-label" id="setting-' + section.id + '">' + translate(section.title) + '</h3>' : '')
+        + '<div class="setting-options"' + (section.items[0].axis ? ' role="radiogroup" aria-label="' + esc(translate(section.title || LOOK_NAMES[section.id] || DETAIL_NAMES[t.group])) + '"' : '') + '>'
         + section.items.map(function (item) {
           var swatch = item.axis === 'bg', body = '';
           if (swatch || item.thumbnail) body += item.value === 'light' || item.value === 'dark'
             ? '<span class="setting-swatch swatch-' + item.value + '" aria-hidden="true"></span>'
             : '<img class="setting-swatch" src="' + WP + S.c.wall + '-thumb.jpg" alt="">';
-          body += '<span class="setting-copy"><span class="setting-name">' + esc(item.label) + '</span>'
-            + (item.description ? '<span class="setting-description">' + esc(item.description) + '</span>' : '') + '</span>';
+          body += '<span class="setting-copy"><span class="setting-name">' + esc(translate(item.label)) + '</span>'
+            + (item.description ? '<span class="setting-description">' + esc(translate(item.description)) + '</span>' : '') + '</span>';
           if (!item.axis) body += icon('right', 'setting-forward');
           return command(item, body, item.description ? 'has-description' : '');
         }).join('') + '</div>'
-        + (section.reason ? '<p class="setting-reason">' + esc(section.reason) + '</p>' : '') + '</section>';
+        + (section.reason ? '<p class="setting-reason">' + esc(translate(section.reason)) + '</p>' : '') + '</section>';
     }).join(''));
-    if (S.pending) status = '<p>Loading ' + esc(S.pending.row === 'font' ? FONTS[S.pending.target.font].name : 'your choice') + '…</p><p>Back cancels this change.</p>';
+    if (t.group === 'addons') { var selectedAddon = appearanceRows.querySelector('.is-focus'); if (selectedAddon) selectedAddon.scrollIntoView({ block: 'nearest' }); }
+    var slider = appearanceRows.querySelector('input[type="range"]');
+    if (slider) {
+      slider.value = S.c.spotifyTransparency;
+      slider.setAttribute('aria-valuetext', S.c.spotifyTransparency + '%');
+      slider.parentNode.querySelector('output').textContent = S.c.spotifyTransparency + '%';
+    }
+    if (S.pending) status = "<p>" + translate("Loading ") + esc(S.pending.row === 'font' ? FONTS[S.pending.target.font].name : translate('your choice')) + "…</p><p>" + translate("Back cancels this change.") + "</p>";
     else if (error) {
-      status = '<p class="setting-error">' + (error.type === 'save' ? 'Couldn’t save this change.' : error.type === 'font' ? 'Couldn’t load ' + esc(FONTS[error.font].name) + '.' : 'Couldn’t load this appearance.') + ' Your current choice is kept.</p>'
-        + command({ action: 'settings.retry', label: 'Try again' }, '<span>Try again</span>', 'setting-retry');
+      status = '<p class="setting-error">' + (error.type === 'save' ? translate('Couldn’t save this change.') : error.type === 'font' ? translate('Couldn’t load ') + esc(FONTS[error.font].name) + '.' : translate('Couldn’t load this appearance.')) + translate(" Your current choice is kept.") + "</p>"
+        + command({ action: 'settings.retry', label: translate('Try again') }, "<span>" + translate("Try again") + "</span>", 'setting-retry');
     }
     setHTML(appearanceStatus, status);
-    hint = selected.disabled ? '' : selected.action === 'settings.back' ? 'Return to ' + (t.group === 'rotation' ? 'Background' : 'Settings') : selected.action === 'settings.retry' ? 'Retry this change' : selected.axis ? 'Apply selected setting' : selected.action === 'background.wallpaper' ? 'Choose a wallpaper' : selected.action === 'background.rotation' ? 'Choose a rotation interval' : 'Open on the TV';
+    hint = selected.disabled ? '' : selected.action === 'settings.back' ? translate('Return to ') + (detailParentName()) : selected.action === 'settings.retry' ? translate('Retry this change') : selected.axis ? translate('Apply selected setting') : selected.action === 'background.wallpaper' ? translate('Choose a wallpaper') : selected.action === 'background.rotation' ? translate('Choose a rotation interval') : translate('Open on the TV');
+    if (selected.action === 'spotify.transparency') { setHTML(appearanceDesc, icon('left') + icon('right') + '<span>' + translate('Adjust with Left and Right') + '</span>'); return; }
     setHTML(appearanceDesc, hint ? '<span class="remote-key">OK</span><span>' + esc(hint) + '</span>' : '');
   }
   function renderWallpaper(t) {
     V.wallpaper.norm(t);
     appearanceEl.className = 'appearance detail-wallpaper';
-    appearanceTitle.textContent = 'Wallpaper';
+    appearanceTitle.textContent = translate('Wallpaper');
     appearanceRows.className = 'appearance-rows wallpaper-picker';
-    setHTML(appearanceBack, '<button type="button" tabindex="-1" class="setting-choice setting-back' + (t.f.zone === 'back' ? ' is-focus' : '') + '" data-z="wall-back" data-action="wallpaper.back">' + icon('left') + '<span>Background</span></button>');
+    setHTML(appearanceBack, '<button type="button" tabindex="-1" class="setting-choice setting-back' + (t.f.zone === 'back' ? ' is-focus' : '') + '" data-z="wall-back" data-action="wallpaper.back">' + icon('left') + "<span>" + translate("Background") + "</span></button>");
     setHTML(appearanceRows, '<div class="wallpaper-edge wallpaper-before" aria-hidden="true">' + icon('up') + '</div><div class="wallpaper-list" role="radiogroup" aria-label="Wallpaper"><div class="wallpaper-rows"></div></div><div class="wallpaper-edge wallpaper-after" aria-hidden="true">' + icon('down') + '</div>');
     var rows = appearanceRows.querySelector('.wallpaper-rows'), shown = wall(S.wallShown) || wall(S.c.wall), candidate = WALLS[t.i], status, note, hint;
     keyed(rows, WALLS.map(function (w) { return { key: w.id, wall: w }; }), function (row, item, i) {
       var visible = i >= t.top && i < t.top + WALL_VISIBLE, w = item.wall, image;
-      setContent(row, w.id + '|' + visible, function () { return '<span class="wallpaper-thumb">' + (visible ? '<img src="' + WP + w.id + '-thumb.jpg" alt="">' : '') + '</span><span class="setting-copy"><span class="setting-name">' + esc(w.name) + '</span></span><span class="setting-tick" aria-hidden="true"></span>'; });
+      setContent(row, w.id + '|' + visible, function () { return '<span class="wallpaper-thumb">' + (visible ? '<img src="' + WP + w.id + '-thumb.jpg" alt="">' : '') + '</span><span class="setting-copy"><span class="setting-name">' + esc(translate(w.name)) + '</span></span><span class="setting-tick" aria-hidden="true"></span>'; });
       row.className = 'setting-choice wallpaper-choice' + (t.f.zone === 'photo' && t.i === i ? ' is-focus' : '') + (w.id === S.c.wall ? ' is-applied' : '');
       row.style.transform = 'translate3d(0,' + (i * WALL_ROW) + 'px,0)'; row.style.visibility = visible ? 'visible' : 'hidden';
-      row.setAttribute('role', 'radio'); row.setAttribute('tabindex', '-1'); row.setAttribute('aria-label', w.name);
+      row.setAttribute('role', 'radio'); row.setAttribute('tabindex', '-1'); row.setAttribute('aria-label', translate(w.name));
       row.setAttribute('aria-checked', String(w.id === S.c.wall)); row.setAttribute('aria-posinset', String(i + 1)); row.setAttribute('aria-setsize', String(WALLS.length));
       row.setAttribute('aria-busy', String(t.previewDue === w.id || S.wallPending === w.id));
       attrs(row, 'wall-choice', i, 'wallpaper.choose.' + w.id);
@@ -1449,12 +1707,12 @@
     rows.style.transform = 'translate3d(0,' + (-t.top * WALL_ROW) + 'px,0)';
     appearanceRows.querySelector('.wallpaper-before').className = 'wallpaper-edge wallpaper-before' + (t.top > 0 ? ' is-on' : '');
     appearanceRows.querySelector('.wallpaper-after').className = 'wallpaper-edge wallpaper-after' + (t.top + WALL_VISIBLE < WALLS.length ? ' is-on' : '');
-    note = t.previewDue ? 'Preparing ' + candidate.name + '…' : S.wallPending ? (t.applyPending ? 'Applying ' : 'Loading ') + candidate.name + '…' : shown.id === S.c.wall ? 'Applied' : 'Preview';
-    if (t.failedId) note = S.err ? 'Couldn’t save ' + wall(t.failedId).name + '.' : 'Couldn’t load ' + wall(t.failedId).name + '.';
-    status = '<p class="wallpaper-preview-name"><span>' + esc(shown.name) + '</span><span class="wallpaper-count">' + (wallIndex(shown.id) + 1) + ' of ' + WALLS.length + '</span></p><p class="wallpaper-preview-state' + (t.failedId ? ' setting-error' : '') + '">' + esc(note) + '</p>';
-    if (t.failedId) status += '<button type="button" tabindex="-1" class="setting-choice setting-retry' + (t.f.zone === 'retry' ? ' is-focus' : '') + '" data-z="wall-retry" data-action="wallpaper.retry">Try again</button>';
+    note = t.previewDue ? translate('Preparing ') + candidate.name + '…' : S.wallPending ? (t.applyPending ? translate('Applying ') : translate('Loading ')) + candidate.name + '…' : shown.id === S.c.wall ? translate('Applied') : translate('Preview');
+    if (t.failedId) note = S.err ? translate('Couldn’t save ') + wall(t.failedId).name + '.' : translate('Couldn’t load ') + wall(t.failedId).name + '.';
+    status = '<p class="wallpaper-preview-name"><span>' + esc(translate(shown.name)) + '</span><span class="wallpaper-count">' + (wallIndex(shown.id) + 1) + translate(' of ') + WALLS.length + '</span></p><p class="wallpaper-preview-state' + (t.failedId ? ' setting-error' : '') + '">' + esc(note) + '</p>';
+    if (t.failedId) status += '<button type="button" tabindex="-1" class="setting-choice setting-retry' + (t.f.zone === 'retry' ? ' is-focus' : '') + "\" data-z=\"wall-retry\" data-action=\"wallpaper.retry\">" + translate("Try again") + "</button>";
     setHTML(appearanceStatus, status);
-    hint = t.f.zone === 'back' ? 'Return to Background' : t.f.zone === 'retry' ? 'Retry this photo' : 'Apply selected photo';
+    hint = t.f.zone === 'back' ? translate('Return to Background') : t.f.zone === 'retry' ? translate('Retry this photo') : translate('Apply selected photo');
     if (t.f.zone === 'photo' && candidate.id === S.c.wall && !S.pending && !t.failedId) hint = '';
     setHTML(appearanceDesc, hint ? '<span class="remote-key">OK</span><span>' + hint + '</span>' : '');
   }
@@ -1462,7 +1720,7 @@
      shares its position without changing the control's identity or key behaviour. */
   function renderFocusStatus(t) {
     if (isSettingsDetail(t)) { focusStatus.className = 'focus-status'; return; }
-    var root = isSettingsDetail(top()) ? appearanceEl : sheetEl.hidden ? homeEl : sheetEl, active = root.querySelectorAll('.is-focus[data-action]'), target = null, text = S.err ? 'Not saved. OK tries again.' : '', i, r, sr, scale, x, y, w, action, solid, photoRow = false, photoFree = false;
+    var root = isSettingsDetail(top()) ? appearanceEl : sheetEl.hidden ? homeEl : sheetEl, active = root.querySelectorAll('.is-focus[data-action]'), target = null, text = S.err ? translate('Not saved. OK tries again.') : '', i, r, sr, scale, x, y, w, action, solid, photoRow = false, photoFree = false;
     Array.prototype.forEach.call(stage.querySelectorAll('.has-local-status'), function (el) { el.className = el.className.replace(/\s+has-local-status/g, ''); });
     for (i = 0; i < active.length; i++) if (renderedAction(active[i])) { target = active[i]; break; }
     if (!text && t.id === 'arrange' && (t.f.zone === 'act' || t.f.zone === 'tiles')) {
@@ -1490,14 +1748,14 @@
     solid = /(?:^|\s)(?:u|btn|er-rm|dock-action|set-row|ph-action)(?:\s|$)/.test(target.className) && target.parentNode !== utilsEl && target.parentNode.className.indexOf('s-head') < 0;
     if (target === phAction && target.className.indexOf('is-focus') < 0) solid = false;
     focusStatus.className = 'focus-status is-on' + (solid ? ' dark-ink' : '') + (photoFree ? ' photo-status' : '');
-    focusStatus.textContent = text;
+    focusStatus.textContent = translate(text);
     focusStatus.style.left = clamp(x + 8, 112, 1808 - Math.min(w - 16, 800)) + 'px';
     focusStatus.style.top = clamp(y, 72, 988) + 'px';
     focusStatus.style.width = Math.min(w - 16, 800) + 'px';
   }
   function headButtons(list, fi, prefix) {
     return list.map(function (b, i) {
-      return '<button type="button" tabindex="-1" class="btn' + (i === fi ? ' is-focus' : '') + (b[2] ? ' ' + b[2] : '') + '" data-z="head" data-i="' + i + '" data-action="' + prefix + '.' + b[0] + '" aria-label="' + esc(b[0] === 'undo' ? undoCaption() : b[1]) + '">' + (b[3] ? icon(b[3]) : '') + '<span>' + b[1] + '</span></button>';
+      return '<button type="button" tabindex="-1" class="btn' + (i === fi ? ' is-focus' : '') + (b[2] ? ' ' + b[2] : '') + '" data-z="head" data-i="' + i + '" data-action="' + prefix + '.' + b[0] + '" aria-label="' + esc(translate(b[0] === 'undo' ? undoCaption() : b[1])) + '">' + (b[3] ? icon(b[3]) : '') + '<span>' + translate(b[1]) + '</span></button>';
     }).join('');
   }
   var FRAMES = {
@@ -1507,26 +1765,26 @@
         + '<div class="row-cue grid-before" data-slot="before" aria-hidden="true">' + icon('up') + '</div><div class="row-cue grid-after" data-slot="after" aria-hidden="true">' + icon('down') + '</div>';
     },
     editor: function () {
-      return '<h2 class="s-title">Apps on Home</h2><p class="s-sub" data-slot="sub"></p><div class="s-head" data-slot="head"></div>'
-        + '<p class="s-label z-home" data-slot="lh"></p><p class="s-label z-other">Not on Home</p>'
-        + '<div class="ed-home" data-slot="home"></div><div class="ed-order-break" data-slot="break">Then scroll</div><div class="ed-other-view" data-slot="ov"><div class="ed-other" data-slot="other"></div></div><div class="ed-origin" data-slot="origin"></div>'
+      return "<h2 class=\"s-title\">" + translate("Apps on Home") + "</h2><p class=\"s-sub\" data-slot=\"sub\"></p><div class=\"s-head\" data-slot=\"head\"></div>"
+        + "<p class=\"s-label z-home\" data-slot=\"lh\"></p><p class=\"s-label z-other\">" + translate("Not on Home") + "</p>"
+        + "<div class=\"ed-home\" data-slot=\"home\"></div><div class=\"ed-order-break\" data-slot=\"break\">" + translate("Then scroll") + "</div><div class=\"ed-other-view\" data-slot=\"ov\"><div class=\"ed-other\" data-slot=\"other\"></div></div><div class=\"ed-origin\" data-slot=\"origin\"></div>"
         + '<div class="row-cue editor-before" data-slot="otherBefore" aria-hidden="true">' + icon('up') + '</div><div class="row-cue editor-after" data-slot="otherAfter" aria-hidden="true">' + icon('down') + '</div>';
     },
-    settings: function () { return '<h2 class="s-title">Settings</h2><div class="settings-overview" data-slot="list"></div><p class="settings-overview-hint"><span class="remote-key">OK</span><span>Open selected group</span></p>'; },
+    settings: function () { return "<h2 class=\"s-title\">" + translate("Settings") + "</h2><div class=\"settings-overview has-extras\" data-slot=\"list\"></div><p class=\"settings-overview-hint\"><span class=\"remote-key\">OK</span><span>" + translate("Open selected group") + "</span></p>"; },
     message: function (t) {
       var m = messageContent(t);
-      return '<h2 class="msg-title">' + esc(m.title) + '</h2><p class="msg-line">' + esc(m.line) + '</p><p class="msg-note">' + esc(m.note) + '</p><div class="msg-acts" data-slot="acts"></div>';
+      return '<h2 class="msg-title">' + esc(translate(m.title)) + '</h2><p class="msg-line">' + esc(translate(m.line)) + '</p><p class="msg-note">' + esc(translate(m.note)) + '</p><div class="msg-acts" data-slot="acts"></div>';
     }
   };
   function gridTileHtml(id) {
-    var a = app(id), state = onHome(id) ? badge(true) + '<span>On Home</span>' : '';
+    var a = app(id), state = onHome(id) ? badge(true) + "<span>" + translate("On Home") + "</span>" : '';
     return '<span class="panel-content">' + appMark(a, 120, 72, 58) + '<span class="label">' + esc(a.name) + '</span></span><span class="state">' + state + '</span>';
   }
   var FILLS = {
     apps: function (t, el) {
       var f = t.f, items = appsItems(), n = items.length, rows = Math.ceil(n / COLS), vis = 3, row = Math.floor(f.i / COLS);
-      setHTML(el.title, 'All apps');
-      setHTML(el.sub, esc(catalog.loading ? 'Loading installed apps…' : catalog.error || (!n ? 'No installed apps found.' : '')));
+      setHTML(el.title, translate('All apps'));
+      setHTML(el.sub, esc(catalog.loading ? translate('Loading installed apps…') : catalog.error || (!n ? translate('No installed apps found.') : '')));
       setHTML(el.head, headButtons(appsHead(), f.zone === 'head' ? 0 : -1, 'apps'));
       el.head.className = 's-head' + (f.zone === 'head' ? ' is-awake' : '');
       if (f.zone === 'grid') { if (row < t.top) t.top = row; if (row > t.top + vis - 1) t.top = row - vis + 1; }
@@ -1547,11 +1805,11 @@
     editor: function (t, el) {
       var f = t.f, H = t.lifted ? t.lifted.order : S.c.home, O = otherGroups(), list = O.recent.concat(O.rest), full = S.c.home.length >= CAP;
       var entries = [], ys = [], y = 0, yf, minTop, maxTop = 0, rowEnd, before = false, afterRows = false;
-      var hint = catalog.error ? catalog.error : catalog.loading ? 'Loading installed apps…' : f.zone === 'head' && f.h === 0 ? undoCaption() : f.zone === 'home' && f.part === 'remove' ? (H.length <= 1 ? LAST : app(H[f.i]).name + ' stays installed.') : '';
-      setHTML(el.sub, editStatus(hint, t.lifted ? 'Moving ' + app(t.lifted.id).name + '. OK places it, Back puts it back.' : ''));
-      setHTML(el.head, headButtons([['undo', 'Undo', S.undo.length ? '' : 'is-idle', 'undo'], ['done', 'Done', '', 'check']], f.zone === 'head' ? f.h : -1, 'editor'));
+      var hint = catalog.error ? catalog.error : catalog.loading ? translate('Loading installed apps…') : f.zone === 'head' && f.h === 0 ? undoCaption() : f.zone === 'home' && f.part === 'remove' ? (H.length <= 1 ? LAST : app(H[f.i]).name + translate(' stays installed.')) : '';
+      setHTML(el.sub, editStatus(hint, t.lifted ? translate('Moving ') + app(t.lifted.id).name + translate('. OK places it, Back puts it back.') : ''));
+      setHTML(el.head, headButtons([['undo', translate('Undo'), S.undo.length ? '' : 'is-idle', 'undo'], ['done', translate('Done'), '', 'check']], f.zone === 'head' ? f.h : -1, 'editor'));
       el.head.className = 's-head' + (f.zone === 'head' ? ' is-awake' : '');
-      setHTML(el.lh, 'On Home <span class="s-count">' + S.c.home.length + ' of ' + CAP + '</span>');
+      setHTML(el.lh, "" + translate("On Home ") + "<span class=\"s-count\">" + S.c.home.length + translate(' of ') + CAP + '</span>');
       el['break'].className = 'ed-order-break' + (H.length > editorCut() ? ' is-on' : '');
       el['break'].style.top = (264 + editorCut() * ED_ROW) + 'px';
 
@@ -1563,16 +1821,16 @@
         row.querySelector('.er-num').textContent = String(i + 1);
         row.firstChild.className = 'er-name' + (here && (f.part === 'name' || lifted) ? ' is-focus' : '');
         row.lastChild.className = 'er-rm' + (here && f.part === 'remove' && !lifted ? ' is-focus' : '') + (H.length <= 1 ? ' is-limit' : '');
-        row.lastChild.firstChild.textContent = H.length <= 1 ? LAST : 'Remove from Home';
+        row.lastChild.firstChild.textContent = H.length <= 1 ? translate(LAST) : translate('Remove from Home');
         attrs(row.firstChild, 'name', i, 'editor.move.' + it.id);
         attrs(row.lastChild, 'remove', i, 'editor.remove.' + it.id);
       });
       el.origin.className = 'ed-origin' + (t.lifted && t.lifted.from !== f.i ? ' is-on' : '');
       if (t.lifted) el.origin.style.transform = 'translate3d(0,' + (264 + editorHomeY(t.lifted.from) + 16) + 'px,0)';
 
-      if (O.recent.length) { entries.push({ key: 'sep-recent', sep: 'Recently removed', y: y }); y += ED_SEP; }
+      if (O.recent.length) { entries.push({ key: 'sep-recent', sep: translate('Recently removed'), y: y }); y += ED_SEP; }
       O.recent.forEach(function (id) { entries.push({ key: id, id: id, y: y }); ys.push(y); y += ED_ROW; });
-      if (O.recent.length && O.rest.length) { entries.push({ key: 'sep-rest', sep: 'Other installed apps', y: y }); y += ED_SEP; }
+      if (O.recent.length && O.rest.length) { entries.push({ key: 'sep-rest', sep: translate('Other installed apps'), y: y }); y += ED_SEP; }
       O.rest.forEach(function (id) { entries.push({ key: id, id: id, y: y }); ys.push(y); y += ED_ROW; });
       if (f.zone === 'other' && ys.length) {
         yf = ys[f.j] - (O.recent.length && (f.j === 0 || f.j === O.recent.length) ? ED_SEP : 0);
@@ -1590,10 +1848,10 @@
         rowEnd = it.y + (it.sep ? ED_SEP : 72);
         row.style.visibility = it.y >= t.top && rowEnd <= t.top + ED_VIEW ? 'visible' : 'hidden';
         before = before || it.y < t.top; afterRows = afterRows || rowEnd > t.top + ED_VIEW;
-        if (it.sep) { setContent(row, 'sep|' + it.sep, function () { return esc(it.sep); }); row.className = 'eo-sep'; return; }
+        if (it.sep) { setContent(row, 'sep|' + it.sep, function () { return esc(translate(it.sep)); }); row.className = 'eo-sep'; return; }
         j = list.indexOf(it.id); focus = f.zone === 'other' && j === f.j; a = app(it.id);
         setContent(row, it.id, function () { return '<span class="panel-content">' + smallMark(a) + '<span class="eo-text">' + esc(a.name) + '</span><span class="eo-verb"></span></span>'; });
-        setHTML(row.querySelector('.eo-verb'), focus ? '<span class="verb' + (full ? ' is-off' : '') + '">' + (full ? 'Home is full' : 'Add to Home') + '</span>' : '');
+        setHTML(row.querySelector('.eo-verb'), focus ? '<span class="verb' + (full ? ' is-off' : '') + '">' + (full ? translate('Home is full') : translate('Add to Home')) + '</span>' : '');
         row.className = 'eo' + (focus ? ' is-focus' : '');
         row.setAttribute('role', 'button');
         attrs(row, 'other', j, 'editor.add.' + it.id);
@@ -1606,13 +1864,13 @@
     settings: function (t, el) {
       var html = '';
       settingsRows().forEach(function (r) {
-        html += '<button type="button" tabindex="-1" class="settings-group' + (r.id === t.f.id ? ' is-focus' : '') + '" data-z="row" data-i="0" data-id="' + r.id + '" data-action="settings.' + (r.id === 'editor' ? 'editor' : 'group.' + r.id) + '"><span class="settings-group-copy"><span class="settings-group-name">' + esc(r.label) + '</span><span class="settings-group-value">' + esc(r.value) + '</span></span>' + icon('right') + '</button>';
+        html += '<button type="button" tabindex="-1" class="settings-group' + (r.id === t.f.id ? ' is-focus' : '') + '" data-z="row" data-i="0" data-id="' + r.id + '" data-action="settings.' + (r.id === 'editor' ? 'editor' : 'group.' + r.id) + '"><span class="settings-group-copy"><span class="settings-group-name">' + esc(translate(r.label)) + '</span><span class="settings-group-value">' + esc(translate(r.value)) + '</span></span>' + icon('right') + '</button>';
       });
       setHTML(el.list, html);
     },
     message: function (t, el) {
       setHTML(el.acts, messageContent(t).actions.map(function (a, i) {
-        return '<button type="button" tabindex="-1" class="btn' + (i === t.f.b ? ' is-focus' : '') + '" data-z="act" data-i="' + i + '" data-action="message.' + a[0] + '"><span>' + a[1] + '</span></button>';
+        return '<button type="button" tabindex="-1" class="btn' + (i === t.f.b ? ' is-focus' : '') + '" data-z="act" data-i="' + i + '" data-action="message.' + a[0] + '"><span>' + translate(a[1]) + '</span></button>';
       }).join(''));
     }
   };
@@ -1767,9 +2025,10 @@
     }, Math.max(10, mode().min * QA.minuteMs - activeMs));
   }
   function updateClock() {
+    if (S.c) ADDONS.render(top().id === 'home' && !spotifyExpanded(), S.c.language);
     clearTimeout(clockTimer);
     if (document.hidden) return;
-    if (top().id === 'home' || isSettingsDetail(top())) renderCaption(top(), homeState(top()));
+    if (top().id === 'home' || isSettingsDetail(top())) render();
     clockTimer = setTimeout(updateClock, 60000 - (Date.now() % 60000) + 30);
   }
   function focusStage() { try { stage.focus({ preventScroll: true }); } catch (e) { stage.focus(); } }
@@ -1784,10 +2043,14 @@
     after();
   }
   function fit() {
-    var scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    // Android WebView can include the unscaled stage in innerWidth/innerHeight.
+    // Its root client area is the actual visible viewport, including TV density.
+    var width = ANDROID ? document.documentElement.clientWidth : window.innerWidth;
+    var height = ANDROID ? document.documentElement.clientHeight : window.innerHeight;
+    var scale = Math.min(width / 1920, height / 1080);
     stage.style.transform = 'scale(' + scale + ')';
-    stage.style.left = ((window.innerWidth - 1920 * scale) / 2) + 'px';
-    stage.style.top = ((window.innerHeight - 1080 * scale) / 2) + 'px';
+    stage.style.left = ((width - 1920 * scale) / 2) + 'px';
+    stage.style.top = ((height - 1080 * scale) / 2) + 'px';
   }
   function renderedAction(el) {
     return el.getClientRects().length > 0 && window.getComputedStyle(el).visibility !== 'hidden';
@@ -1804,10 +2067,43 @@
     for (i = 0; i < els.length; i++) if (renderedAction(els[i]) && els[i].getAttribute('data-action') === action) { pointAt(els[i]); return true; }
     return false;
   }
+
+  /* Passive selection is separate from activation, including in the visual editor. */
+  function focusElement(el) {
+    var t = top(), f = t.f, z = el.getAttribute('data-z'), i = +el.getAttribute('data-i'), action = el.getAttribute('data-action');
+    if (!renderedAction(el) || el.getAttribute('aria-disabled') === 'true') return false;
+    if (t.id === 'home') {
+      if (z === 'util') { f.zone = 'util'; f.u = i; S.lastUtil = i; }
+      else if (z === 'app') { f.zone = 'apps'; setSel(S.c.home[i]); }
+      else if (z === 'spotify' || z === 'spotify-entry') { f.zone = 'spotify'; f.p = z === 'spotify-entry' ? 1 : i; }
+      else if (z === 'empty') f.zone = 'apps'; else return false;
+    } else if (t.id === 'settings') { f.id = el.getAttribute('data-id'); S.settingsFocus = f.id; }
+    else if (t.id === 'appearance') {
+      detailRows(t).forEach(function (row) { row.forEach(function (item, col) { if (item.action === action) detailFocus(t, item, col); }); });
+    } else if (t.id === 'wallpaper') {
+      if (z === 'wall-choice') previewWallpaper(t, i, false); else f.zone = z === 'wall-back' ? 'back' : 'retry';
+    } else if (t.id === 'apps') { f.zone = z === 'grid' ? 'grid' : 'head'; f.i = i; S.appsFocus = appsItems()[i] || null; }
+    else if (t.id === 'editor') {
+      if (t.lifted) return false;
+      if (z === 'name' || z === 'remove') { f.zone = 'home'; f.i = i; f.part = z; }
+      else if (z === 'other') { f.zone = 'other'; f.j = i; rememberOther(t); }
+      else { f.zone = 'head'; f.h = i; }
+    } else if (t.id === 'message') f.b = i;
+    else return false;
+    spotifyActivity(); return true;
+  }
+  function focusAction(action) {
+    var root = isSettingsDetail(top()) ? appearanceEl : sheetEl.hidden ? homeEl : sheetEl;
+    var nodes = root.querySelectorAll('[data-action]'), found = false;
+    Array.prototype.some.call(nodes, function (el) { if (el.getAttribute('data-action') !== action) return false; found = focusElement(el); return found; });
+    if (found) after(); return found;
+  }
+
   function pointAt(el) {
     var t = top(), v = V[t.id];
     norm();
     if (v.point) v.point(t, el.getAttribute('data-z'), +el.getAttribute('data-i'), el.getAttribute('data-id'));
+    spotifyActivity();
     norm();
     render();
     syncRotation();
@@ -1824,6 +2120,12 @@
     t.f.zone = z; t.f.u = i;
     if (z === 'util') S.lastUtil = i;
     render();
+  });
+  appearanceRows.addEventListener('input', function (event) {
+    if (event.target.getAttribute('data-action') === 'spotify.transparency') event.target.parentNode.querySelector('output').textContent = event.target.value + '%';
+  });
+  appearanceRows.addEventListener('change', function (event) {
+    if (event.target.getAttribute('data-action') === 'spotify.transparency') { applyHomeOption('spotifyTransparency', clamp(Math.round(Number(event.target.value) / 5) * 5, 0, 100)); render(); }
   });
   stage.addEventListener('click', function (ev) {
     var el = ev.target;
@@ -1846,7 +2148,7 @@
   window.addEventListener('focus', function () { release(); focusStage(); after(); updateClock(); });
   document.addEventListener('visibilitychange', function () {
     heldKeys = {};
-    if (document.hidden) { pauseRotation(); clearTimeout(clockTimer); }
+    if (document.hidden) { pauseRotation(); clearTimeout(clockTimer); syncSpotify(); renderSpotify(); }
     else {
       release();
       if (S.c.bg === 'photo' && !S.pending && !S.previewBundle && (!committedBundle || S.bundleKey !== bundleKey(S.c))) setLook({}, { transient: true, startup: true });
@@ -1854,12 +2156,15 @@
     }
   });
   window.addEventListener('resize', fit);
+  window.addEventListener('cleanframe:addons', function () { if (S.c) { norm(); render(); } });
+  window.addEventListener('cleanframe:spotify', function (event) { if (SPOTIFY) receiveSpotify(event.detail); });
 
   /* Readable browser checks use the real state and actions, without fake outcomes. */
   var NAV = { left: 'left', right: 'right', up: 'up', down: 'down', ok: 'ok', enter: 'ok', back: 'back', escape: 'back' };
   QA.state = function () {
     var out = serialise(S.c), t = top(), item = t.id === 'appearance' ? detailLocation(t).item : null;
     out.committed = S.c; out.shown = S.shown; out.pending = S.pending; out.view = t.id; out.selected = S.sel;
+    out.spotify = spotifyState;
     out.focusAction = focusedAction(); out.writes = S.writes; out.failedWrites = S.failed; out.error = S.err;
     out.catalog = { loading: catalog.loading, loaded: catalog.loaded, error: catalog.error, ids: ALPHA.slice() };
     out.fonts = { available: LOOK_VALUES.font.slice(), loaded: Object.keys(fontMetrics).filter(function (id) { return !fontMetrics[id].fallback; }), baselineFallback: !!(fontMetrics.manrope && fontMetrics.manrope.fallback), error: S.lookError && S.lookError.type === 'font' ? S.lookError : null };
@@ -1883,11 +2188,47 @@
   QA.look = function (patch) { setLook(patch, {}); return QA.state(); };
   QA.scene = function (name) { if (['home', 'apps', 'settings', 'appearance', 'editor'].indexOf(name) < 0) throw new Error('Unknown view'); goScene(name); return QA.state(); };
   QA.activate = function (action) { return activate(action) ? QA.state() : null; };
+  QA.focus = focusAction;
+  QA.render = after;
+  QA.preferences = function (patch) {
+    var allowed = Object.keys(LOOK_VALUES).concat(['wall', 'mode', 'home'], HOME_OPTIONS), c = next(S.c.home.slice(), S.c.recent.slice());
+    Object.keys(patch).forEach(function (name) { if (allowed.indexOf(name) < 0) throw new Error('Unknown preference: ' + name); c[name] = patch[name]; });
+    c = clean(c);
+    if (!write(c, 'Editor preferences')) throw new Error('Preferences could not be saved');
+    widthCache = {}; fontRevision++; setLook({}, { transient: true }); after();
+    return QA.state();
+  };
+  if (window.CleanFramePreview) {
+    QA.editorScene = function (name) {
+      goScene('home');
+      if (name.indexOf('appearance.') === 0) { openSettings(); openAppearance(name.substring(11)); }
+      else if (name === 'wallpaper') { openSettings(); openAppearance('background'); openWallpaper(); }
+      else if (name === 'message.signout') { openSettings(); openAppearance('spotify'); detailOk(top(), { action: 'spotify.signout' }); }
+      else if (name === 'message.leave') openMessage('leave');
+      else if (name === 'message.error') push({ id: 'message', msg: 'error', content: { title: translate('Try again'), line: 'Diese App konnte nicht geöffnet werden.', note: 'Vorschau eines Verbindungsfehlers', actions: [['back', translate('Back')]] }, f: { b: 0 } });
+      else goScene(name);
+      after(); return QA.state();
+    };
+    QA.playerView = function (expanded, pin) {
+      if (top().id !== 'home') goScene('home');
+      if (expanded) { top().f.zone = 'spotify'; top().f.p = 1; spotifyActivity(); }
+      else { top().f.zone = 'apps'; spotifyAwake = false; }
+      if (pin) { clearTimeout(spotifyIdleTimer); spotifyIdleTimer = 0; }
+      after();
+    };
+  }
+  if (window.CleanFrameDesign) window.CleanFrameDesign.attach({ render: after });
+
   QA.actions = function () { var view = isSettingsDetail(top()) ? appearanceEl : sheetEl.hidden ? homeEl : sheetEl; return Array.prototype.filter.call(view.querySelectorAll('[data-action]'), renderedAction).map(function (el) { return el.getAttribute('data-action'); }); };
 
   /* ---------- Start ---------- */
   cueL.innerHTML = icon('left'); cueR.innerHTML = icon('right');
+  spotifyControls.innerHTML = spotifyCommands.map(function (command, i) { return '<button type="button" tabindex="-1" class="spotify-button" data-z="spotify" data-i="' + i + '" data-action="spotify.' + command + '"></button>'; }).join('');
+  $('spotifyOpen').innerHTML = '<img src="assets/icons/spotify.svg" alt="">' + icon('right');
+  ['spotify', 'spotifyCompact'].forEach(function (prefix) { $(prefix + 'Cover').onerror = function () { this.hidden = true; $(prefix + 'Fallback').hidden = false; }; });
+  if (SPOTIFY) { try { spotifyState = FrameDevice.spotify.state(); spotifyAt = window.performance.now(); } catch (error) { spotifyState = { status: 'unavailable', errorMessage: error.message }; } }
   initialise();
   setLook({}, { transient: true, startup: true });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
+  if (ANDROID) refreshCatalog();
 })();

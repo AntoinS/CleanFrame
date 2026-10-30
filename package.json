@@ -1,8 +1,8 @@
 {
   "name": "cleanframe",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "private": true,
-  "description": "A personal, uncluttered home interface for Samsung The Frame.",
+  "description": "CleanFrame TV launcher, Mac design editor and add-on host",
   "scripts": {
     "dev": "python3 scripts/preview.py",
     "check": "npm run lint && python3 scripts/check.py && npm run check:device",
@@ -16,11 +16,16 @@
     "check:public": "python3 scripts/check-public.py",
     "check:tools": "python3 -B scripts/test-tools.py",
     "lint": "eslint app",
-    "check:device": "node --test scripts/test-device.mjs",
-    "check:performance": "node scripts/check-performance.mjs"
+    "check:device": "node --test scripts/test-device.mjs scripts/test-android-device.mjs",
+    "check:performance": "node scripts/check-performance.mjs",
+    "editor": "python3 scripts/editor_server.py --open",
+    "check:editor": "node scripts/check-editor.mjs && node scripts/check-editor-workspace.mjs",
+    "check:addons": "node scripts/check-addons-browser.mjs"
   },
   "devDependencies": {
+    "ajv": "8.20.0",
     "eslint": "10.13.0",
+    "interactjs": "1.10.28",
     "playwright": "1.64.1"
   },
   "license": "MIT",

@@ -88,3 +88,26 @@ Both layouts show the TV's local time in 12-hour format, without AM/PM or second
 Photographic materials and blurred panel backgrounds are generated before packaging and stay aligned with the full-screen image. Photo colour and contrast metadata are also prepared offline. Navigation does not sample image pixels, run an optics engine or apply live backdrop blur. Flat backgrounds use matching light or dark panel colours. Focus feedback uses transforms and opacity; reduced motion removes animated scaling and movement while retaining opacity feedback.
 
 Hidden prelaunch can install a fully loaded wallpaper bundle without waiting for an animation frame. A valid loaded image remains usable if detached-image decoding rejects. A failed startup bundle retries when the launcher becomes visible; an active wallpaper preview keeps its candidate. Font recovery clears fallback measurements and cached markup. This readiness fallback uses a completed load and nonzero image dimensions; it does not prove a TV has painted the image, and an accepted bundle is not automatically decoded again on return. These paths have browser regression coverage; physical cold-boot behaviour still needs owner observation.
+
+## Philips Android personal build: additional settings
+
+- Language selects Deutsch or English immediately, including Home, settings, date,
+  account prompts and the native QR dialog. The initial value follows the TV language
+  (German or English fallback). App names and music metadata stay as supplied.
+- Layout → Controls position selects Automatic, Top right or Bottom right. Explicit
+  positions stack All apps and Settings, with their labels beside the icons. List
+  places the upper controls below its clock. Directional navigation follows the stack;
+  the edge toward the player enters it, and Back returns to the selected app.
+- Spotify → Transparency ranges from 0% opaque to 100% transparent. Left/Right changes
+  it in 5% steps. Only the card background changes, for all three surface colours.
+  Existing installations keep their previous 60% transparency until changed.
+- Spotify → Sign out asks for confirmation and removes CleanFrame's encrypted refresh
+  token, provisioning files and its dedicated Android Keystore entry. The native
+  Spotify app, media permission and current playback are unchanged. The media session
+  can still supply the display; remote account controls require a new sign in.
+  Account management is available even when the player is disabled.
+- All these choices survive app edits, appearance changes and restarts.
+
+## Android settings in 0.7.0
+
+Five main categories replace the Android overview: Display (Background, Typography, Focus), Home screen (Layout, Apps on Home, Clock and date), Add-ons, Language and Android TV. Back returns one level, including from a display subsection to Display. Spotify settings are reached from its installed add-on. The Tizen overview retains its existing categories. See addons.md for download, removal and offline behaviour.

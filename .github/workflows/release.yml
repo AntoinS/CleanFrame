@@ -1,0 +1,32 @@
+name: Prepare versioned release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vMAJOR.MINOR.PATCH tag
+        required: true
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npm run check
+      - name: Validate tag and prepare a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python -c 'import json,os; assert os.environ["RELEASE_TAG"] == "v"+json.load(open("package.json"))["version"]'
+          gh release create "$RELEASE_TAG" --verify-tag --draft --title "CleanFrame $RELEASE_TAG" --notes-file CHANGELOG.md

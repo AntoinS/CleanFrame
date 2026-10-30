@@ -38,6 +38,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .caption{position:absolute;left:140px;top:72px;display:flex;flex-direction:column;max-width:1040px}
 .clock,.cap-title{font-size:48px;line-height:64px;font-weight:500;letter-spacing:-1.5px;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.22)}
 .clock{font-variant-numeric:tabular-nums}
+.clock-date{margin-top:8px;font-size:30px;line-height:36px;font-weight:500;white-space:nowrap;opacity:.8;text-shadow:0 1px 3px rgba(0,0,0,.22)}
+.bg-dark .clock-date,.bg-light .clock-date{text-shadow:none}
+.font-custom .clock-date{font-family:var(--font-ui-family),sans-serif;font-weight:var(--font-ui-weight)}
 .cap-line{max-width:100%;font-size:30px;line-height:40px;font-weight:500;letter-spacing:-.2px;color:rgba(255,255,255,.88);text-shadow:0 1px 2px rgba(0,0,0,.3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .warn{display:inline-flex;align-items:flex-start;color:var(--warn)}
 .warn .ico{width:30px;height:30px;margin-top:5px}
@@ -309,6 +312,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .settings-group.is-focus{background:var(--solid);color:var(--solid-ink)}
 .settings-group.is-focus .settings-group-value,.settings-group.is-focus>.ico{color:var(--solid-mute)}
 .settings-overview-hint{position:absolute;left:140px;top:968px;display:flex;align-items:center;font-size:26px;line-height:36px;color:var(--mute)}
+.settings-overview.has-extras .settings-group{height:80px;padding-top:8px;padding-bottom:8px}
+.settings-overview.has-extras .settings-group-name{font-size:30px;line-height:36px}
+.settings-overview.has-extras .settings-group-value{font-size:20px;line-height:28px}
 .remote-key{display:inline-flex;align-items:center;justify-content:center;min-width:48px;height:34px;padding:0 10px;border:1.5px solid currentColor;border-radius:17px;font-size:21px;line-height:28px;font-weight:600;letter-spacing:0}
 .lay-note{position:absolute;left:140px;top:608px;max-width:1040px;font-size:30px;line-height:42px;font-weight:500;color:var(--mute)}
 
@@ -633,3 +639,126 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .l-list .quiet-utils.is-text .u-content>*+*{margin-left:0;margin-right:0}
 .quiet-utils.is-text .u-content>*+*{margin-left:0}
 .l-list .quiet-utils.is-text .u .u-content>*+*{margin-right:0}
+
+/* Native Spotify session: a quiet card with independent clock and focus updates. */
+.spotify-player{position:absolute;z-index:4;left:672px;bottom:32px;width:576px;height:288px;border-radius:24px;color:#f4f4f1;font-family:Manrope,sans-serif;pointer-events:none}
+.spotify-player.is-light{color:#181818}
+.detail-spotify .section-spotifyAccess .setting-choice{font-size:24px;line-height:32px;padding:16px;min-height:112px}
+.detail-spotify .section-spotifyAccess .setting-description{font-size:18px;line-height:24px}
+.spotify-track{display:flex;align-items:center}
+.spotify-art{width:96px;height:96px;flex:none;position:relative;overflow:hidden;border-radius:8px;background:rgba(128,128,128,.16)}
+.spotify-art img{width:96px;height:96px;object-fit:cover}
+.spotify-art .spotify-fallback{width:64px;height:64px;margin:16px;object-fit:contain}
+.spotify-player.is-light .spotify-fallback{filter:brightness(0)}
+.spotify-copy{min-width:0;margin-left:24px;padding-right:64px}
+.spotify-source{display:block;font-size:18px;line-height:28px;opacity:.72;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spotify-copy h2{font-size:30px;line-height:36px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spotify-copy p{font-size:24px;line-height:32px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spotify-progress{height:4px;margin-top:24px;overflow:hidden;background:rgba(128,128,128,.4);border-radius:2px}
+.spotify-progress>div{height:100%;width:100%;background:currentColor;transform-origin:0 50%}
+.spotify-times{display:flex;justify-content:space-between;margin-top:8px;font-size:18px;line-height:28px;font-variant-numeric:tabular-nums;opacity:.72}
+.spotify-controls{display:flex;justify-content:center;margin-top:16px}
+.spotify-button{width:64px;height:64px;display:flex;align-items:center;justify-content:center;border-radius:16px;transition:transform 300ms cubic-bezier(.22,1,.36,1),opacity 300ms cubic-bezier(.22,1,.36,1)}
+.spotify-button+.spotify-button{margin-left:16px}
+.spotify-button .ico{width:32px;height:32px;stroke-width:2}
+.spotify-button:hover{background:rgba(128,128,128,.24)}
+.spotify-button.is-focus{background:#f4f4f1;color:#181818;outline:none}
+.spotify-player.is-light .spotify-button.is-focus{background:#181818;color:#f4f4f1}
+.spotify-button.is-disabled{opacity:.3}
+.spotify-button:active{transform:scale(.98)}
+.spotify-open{position:absolute;right:16px;top:16px;width:64px;height:48px;border-radius:12px}
+.spotify-open img{width:28px;height:28px}
+.spotify-open .ico{width:20px;height:20px;margin-left:4px}
+.spotify-player.is-light .spotify-open img,.spotify-open.is-focus img{filter:brightness(0)}
+.spotify-player.is-light .spotify-open.is-focus img{filter:none}
+.has-spotify .app-focus-name{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+@media(prefers-reduced-motion:reduce){.spotify-button{transition:opacity 300ms cubic-bezier(.22,1,.36,1)}.spotify-button:active{transform:none}}
+
+/* Bottom-centred player: compact at rest, full controls on remote focus. */
+.spotify-surface,.spotify-surface-expanded{position:absolute;left:0;right:0;bottom:0;border-radius:24px;background:var(--spotify-surface,#131209);transition:transform 400ms cubic-bezier(.22,1,.36,1),opacity 300ms cubic-bezier(.22,1,.36,1)}
+.spotify-surface{height:112px;opacity:var(--spotify-opacity,.4)}
+.spotify-surface-expanded{top:0;opacity:0;transform:translateY(32px) scale(.97);transform-origin:50% 100%}
+.spotify-expanded{position:absolute;left:0;right:0;bottom:0;padding:24px;opacity:0;visibility:hidden;transform:translateY(16px);transition:transform 400ms cubic-bezier(.22,1,.36,1),opacity 300ms cubic-bezier(.22,1,.36,1)}
+.spotify-compact{position:absolute;left:0;right:0;bottom:0;width:100%;height:112px;padding:16px 24px;display:flex;align-items:center;border-radius:24px;pointer-events:auto;opacity:1;transition:transform 400ms cubic-bezier(.22,1,.36,1),opacity 300ms cubic-bezier(.22,1,.36,1)}
+.spotify-compact:hover{background:rgba(128,128,128,.12)}
+.spotify-compact-art{position:relative;display:block;flex:none;width:64px;height:64px;border-radius:8px;overflow:hidden;background:rgba(128,128,128,.16)}
+.spotify-compact-art img{position:absolute;left:0;top:0;width:64px;height:64px;object-fit:cover}
+.spotify-compact-art #spotifyCompactFallback{padding:8px;object-fit:contain}
+.spotify-player.is-light #spotifyCompactFallback{filter:brightness(0)}
+.spotify-compact-copy{display:block;flex:1;min-width:0;margin-left:16px}
+.spotify-compact-title{display:block;font-size:20px;line-height:28px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spotify-compact-artist{display:block;font-size:18px;line-height:24px;opacity:.72;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spotify-compact .spotify-progress{display:block;margin-top:12px;height:4px}
+.spotify-progress>span{display:block;width:100%;height:100%;background:currentColor;transform-origin:0 50%}
+.spotify-player.is-expanded .spotify-surface{opacity:0}
+.spotify-player.is-expanded .spotify-surface-expanded{opacity:var(--spotify-opacity,.4);transform:translateY(0) scale(1)}
+.spotify-player.is-expanded .spotify-expanded{visibility:visible;opacity:1;transform:translateY(0);pointer-events:auto}
+.spotify-player.is-expanded .spotify-compact{visibility:hidden;opacity:0;transform:translateY(12px);pointer-events:none}
+.has-spotify.l-list .caption{max-width:880px}
+.has-spotify.l-list .ph-name{max-width:992px}
+.spotify-focused.l-list .ph-name{max-width:360px}
+.has-spotify.l-dock .dock,.has-spotify.l-dock .cue{transition:transform 400ms cubic-bezier(.22,1,.36,1),opacity 300ms cubic-bezier(.22,1,.36,1)}
+.spotify-focused.l-dock .dock,.spotify-focused.l-dock .cue{transform:translateY(-216px)}
+.detail-spotify .setting-section+.setting-section{margin-top:24px}
+.detail-spotify .setting-choice{min-height:64px}
+.detail-spotify .section-spotifySurface .setting-choice{font-size:30px;padding-left:16px;padding-right:16px}
+.detail-spotify .section-spotifySurface .setting-choice:last-child{flex:1.8}
+.detail-spotify .setting-reason{font-size:22px;line-height:30px;margin-top:8px}
+.detail-spotify .setting-description{font-size:22px;line-height:30px}
+.has-spotify.l-list .quiet-utils,.has-spotify.l-dock .quiet-utils{top:auto;bottom:18px;flex-direction:column;align-items:flex-end}
+.has-spotify .quiet-utils .u .ico,.has-spotify .quiet-utils .u[data-action="util.settings"] .ico{width:36px;height:36px}
+.has-spotify.l-list .quiet-utils.is-both .u .ico,.has-spotify.l-list .quiet-utils.is-both .u[data-action="util.settings"] .ico{width:36px;height:36px}
+.has-spotify.l-list .quiet-utils>*+*,.has-spotify.l-dock .quiet-utils>*+*{margin-left:0;margin-top:0}
+.has-spotify.l-dock .quiet-utils .u-content{flex-direction:row-reverse;transform-origin:100% 50%}
+.has-spotify.l-dock .quiet-utils .u-content>*+*{margin-left:0;margin-right:18px}
+.has-spotify.l-dock .quiet-utils.is-text .u-content>*+*{margin-right:0}
+@media(prefers-reduced-motion:reduce){.spotify-surface,.spotify-surface-expanded,.spotify-expanded,.spotify-compact,.has-spotify.l-dock .dock,.has-spotify.l-dock .cue{transition:opacity 200ms cubic-bezier(.22,1,.36,1)}}
+
+/* Settings keep the existing remote navigation and show the chosen value immediately. */
+.settings-overview.has-extras .settings-group{height:72px;padding-top:4px;padding-bottom:4px}
+.detail-layout .setting-section+.setting-section{margin-top:32px}
+.section-controlsPosition .setting-choice{font-size:24px;line-height:32px;padding:16px 12px}
+.section-controlsPosition .setting-tick{width:24px}
+.detail-spotify .setting-section+.setting-section{margin-top:16px}
+.detail-spotify .setting-label{font-size:24px;line-height:32px;margin-bottom:8px}
+.detail-spotify .setting-choice,.detail-spotify .section-spotifySurface .setting-choice,.detail-spotify .section-spotifyAccess .setting-choice{font-size:24px;line-height:32px;min-height:64px;padding:12px 16px}
+.detail-spotify .setting-name{white-space:normal}
+.detail-spotify .setting-reason{font-size:18px;line-height:24px;margin-top:8px}
+.setting-slider{display:flex;align-items:center;padding:16px 24px;min-height:64px;border-radius:16px;color:var(--ink)}
+.setting-slider.is-selected{background:var(--solid);color:var(--solid-ink)}
+.setting-slider input{color:inherit;flex:1;min-width:0;accent-color:currentColor;height:32px;cursor:pointer}
+.setting-slider output{min-width:80px;margin-left:24px;text-align:right;font-size:24px;line-height:32px;font-variant-numeric:tabular-nums}
+.util-stacked .quiet-utils{flex-direction:column;align-items:flex-end}
+.util-stacked .quiet-utils>*+*{margin-left:0;margin-top:0}
+.util-stacked .quiet-utils .u-content{flex-direction:row-reverse;transform-origin:100% 50%}
+.util-stacked .quiet-utils .u-content>*+*{margin-left:0;margin-right:18px}
+.util-stacked .quiet-utils.is-text .u-content>*+*{margin-right:0}
+.stage.cp-top .quiet-utils{top:72px;bottom:auto}
+.stage.cp-top.l-list .quiet-utils{top:244px}
+.stage.cp-bottom .quiet-utils{top:auto;bottom:18px}
+.stage.util-at-top .quiet-utils{--u-ink:var(--tr-ink);--u-rest:var(--tr-rest);--u-peer:var(--tr-peer);--u-under:var(--tr-under);--u-shadow:var(--tr-shadow);--u-rest-ink:var(--tr-rest-ink);--u-peer-ink:var(--tr-peer-ink)}
+.stage.util-at-bottom .quiet-utils{--u-ink:var(--br-ink);--u-rest:var(--br-rest);--u-peer:var(--br-peer);--u-under:var(--br-under);--u-shadow:var(--br-shadow);--u-rest-ink:var(--br-rest-ink);--u-peer-ink:var(--br-peer-ink)}
+.detail-layout .section-apps .setting-choice,.detail-layout .section-controls .setting-choice{font-size:30px;line-height:36px;padding-left:16px;padding-right:16px}
+.detail-focus .setting-choice{font-size:30px;line-height:36px}
+.detail-focus .setting-name{white-space:normal}
+
+/* A custom Dock radius also applies to the existing material highlight. */
+.mat[style*="border-radius"]::after{border-radius:inherit}
+
+/* Grouped settings and installed add-ons use the existing TV focus system. */
+.is-android .settings-overview.has-extras{width:1056px}
+.is-android .settings-overview.has-extras .settings-group{height:112px;padding:16px 24px;border-radius:16px;background:rgba(128,128,128,.08)}
+.is-android .settings-overview.has-extras .settings-group.is-focus{background:var(--solid)}
+.detail-display .setting-choice,.detail-homescreen .setting-choice{border-radius:16px;margin-bottom:8px}
+.detail-addons .appearance-rows{max-height:660px;overflow-y:auto;padding:8px}
+#addonWidgets{position:absolute;left:1000px;top:260px;width:560px;pointer-events:none}
+.addon-widget{border-radius:16px;background:rgba(24,24,24,.6);color:#fff;padding:24px;margin-bottom:16px}
+.addon-widget h3{font-size:24px;line-height:32px;margin:0 0 8px}
+.addon-widget p{font-size:36px;line-height:40px;margin:0;overflow-wrap:break-word}
+
+.addon-widget{height:160px;padding:16px;overflow:hidden}
+.addon-widget h3{font-size:20px;line-height:28px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.addon-widget p{font-size:20px;line-height:28px;max-height:84px;overflow:hidden}
+.detail-addons .is-horizontal .setting-choice{padding:12px;height:72px;min-width:0}
+.detail-addons .is-horizontal .setting-name{font-size:24px;line-height:32px;white-space:normal}
+.detail-addons .is-horizontal .setting-forward{display:none}

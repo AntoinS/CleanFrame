@@ -1,5 +1,5 @@
 // Development only: check ES5 grammar and common runtime mistakes.
-export default [{
+export default [{ ignores: ['app/vendor/**'] }, {
   files: ['app/**/*.js'],
   languageOptions: {
     ecmaVersion: 5,

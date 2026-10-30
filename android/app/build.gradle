@@ -1,0 +1,55 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.cleanframe.philips'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+
+    defaultConfig {
+        applicationId 'com.cleanframe.philips'
+        minSdk 31
+        targetSdk 35
+        versionCode = (project.findProperty('cleanframeVersionCode') ?: '11').toInteger()
+        versionName = new groovy.json.JsonSlurper().parse(file('../../package.json')).version + '-android' + (project.findProperty('cleanframeVersionCode') ?: '11')
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/cleanframe'))
+    sourceSets.main.res.srcDir(layout.buildDirectory.dir('generated/cleanframe-res'))
+}
+
+// Reuse the original UI; Android-specific behaviour lives in the native bridge.
+def syncCleanFrameAssets = tasks.register('syncCleanFrameAssets', Sync) {
+    from('../../app') {
+        exclude 'config.xml', '**/.DS_Store', 'assets/private-fonts/**'
+    }
+    from('../../LICENSE')
+    from('../../THIRD_PARTY_NOTICES.md')
+    from('../THIRD_PARTY_LICENSES.txt')
+    into(layout.buildDirectory.dir('generated/cleanframe/home'))
+}
+
+def syncCleanFrameIcon = tasks.register('syncCleanFrameIcon', Sync) {
+    from('../../app/icon.png')
+    rename 'icon.png', 'cleanframe_icon.png'
+    into(layout.buildDirectory.dir('generated/cleanframe-res/drawable'))
+}
+
+tasks.named('preBuild').configure {
+    dependsOn(syncCleanFrameAssets, syncCleanFrameIcon)
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.media3:media3-session:1.8.0'
+    implementation 'com.google.zxing:core:3.5.3'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+}
+

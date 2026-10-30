@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">CleanFrame</string>
+    <string name="starting">CleanFrame is starting…</string>
+    <string name="load_failed">CleanFrame could not be displayed.</string>
+    <string name="open_original_home">Open original Home</string>
+    <string name="spotify_qr_description">Spotify sign in QR code</string>
+    <string name="spotify_connect">Connect Spotify</string>
+    <string name="spotify_preparing">Preparing sign in…</string>
+    <string name="back">Back</string>
+    <string name="spotify_scan">Scan the QR code with your phone and sign in directly at Spotify. Use the same account as in the Spotify TV app.</string>
+    <string name="spotify_pairing_code">Code: %1$s · Valid for 10 minutes</string>
+    <string name="spotify_unreachable">The sign in service is unavailable. Please try again later.</string>
+    <string name="spotify_expired">The QR code has expired. Open sign in again.</string>
+    <string name="spotify_cancelled">Sign in was cancelled. Your existing connection is unchanged.</string>
+    <string name="spotify_connected">Spotify is connected</string>
+    <string name="spotify_returning">Returning to CleanFrame shortly.</string>
+    <string name="spotify_failed">Could not finish connecting. Open sign in again. Your existing connection is unchanged.</string>
+</resources>
+

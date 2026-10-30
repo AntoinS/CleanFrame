@@ -1,0 +1,20 @@
+// Shared local document validation; no executable CSS, selectors or filesystem paths.
+import Ajv from 'ajv';
+const range = (minimum, maximum) => ({type:'number',minimum,maximum});
+const enumOf = values => ({enum:values});
+export const scenes = ['home','apps','settings','editor','wallpaper','qr','message.leave','message.signout','message.error',...['background','layout','typography','focus','rotation','samsung','clock','spotify','language'].map(x=>'appearance.'+x)];
+export const prefProperties = {
+ bg:enumOf(['photo','dark','light']),wall:{type:'string',pattern:'^[a-z0-9-]{1,40}$'},layout:enumOf(['dock','list']),apps:enumOf(['icons','text','both']),font:enumOf(['manrope','geist','newsreader','montreal','mori','pangram']),controls:enumOf(['icons','text','both']),focus:enumOf(['glass','type']),material:enumOf(['soft','frost','tint']),mode:enumOf(['fixed','open','5','15','60']),dateVisible:{type:'boolean'},spotifyEnabled:{type:'boolean'},spotifySurface:enumOf(['dark','light','cover']),spotifyTransparency:range(0,100),controlsPosition:enumOf(['auto','top','bottom']),language:enumOf(['de','en']),home:{type:'array',maxItems:24,uniqueItems:true,items:{type:'string',pattern:'^[A-Za-z0-9_.-]{1,180}$'}}
+};
+const prefs={type:'object',additionalProperties:false,properties:prefProperties};
+const sides=Object.fromEntries(['paddingTop','paddingRight','paddingBottom','paddingLeft','marginTop','marginRight','marginBottom','marginLeft','gap'].map(k=>[k,range(0,400)]));
+const style={type:'object',additionalProperties:false,properties:{...sides,offsetX:range(-1920,1920),offsetY:range(-1080,1080),width:range(8,1920),height:range(8,1080),fontFamily:enumOf(['Manrope','Study Geist','Study Newsreader']),fontSize:range(8,144),fontWeight:enumOf([100,200,300,400,500,600,700]),lineHeight:range(8,200),letterSpacing:range(-10,40),radius:range(0,160),padding:range(0,96),spacing:range(0,96),opacity:range(0,1),color:{type:'string',pattern:'^#[0-9a-fA-F]{6}$'},background:{type:'string',pattern:'^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$'}}};
+export const designSchema={type:'object',additionalProperties:false,required:['version','rules'],properties:{version:{const:1},rules:{type:'array',maxItems:2000,items:{type:'object',additionalProperties:false,required:['view','layout','state','target','style'],properties:{view:enumOf(['*',...scenes]),layout:enumOf(['*','dock','list']),state:enumOf(['*','compact','expanded']),target:{type:'string',maxLength:700,pattern:'^[A-Za-z0-9._:/#-]+$'},style}}}}};
+const guides={type:'array',maxItems:100,items:{type:'object',additionalProperties:false,required:['id','axis','position','view','layout'],properties:{id:{type:'string',maxLength:80},axis:enumOf(['x','y']),position:range(0,1920),view:enumOf(scenes),layout:enumOf(['dock','list'])}}};
+const content={type:'object',additionalProperties:false,required:['design','preferences'],properties:{design:designSchema,preferences:prefs,guides}};
+export const schema={type:'object',additionalProperties:false,required:['version','design','preferences','basePrefs','ui'],properties:{version:{const:1},design:designSchema,preferences:prefs,basePrefs:prefs,guides,baseCapturedAt:{type:'string',maxLength:80},ui:{type:'object',additionalProperties:false,properties:{view:enumOf(scenes),state:enumOf(['compact','expanded']),scenario:enumOf(['playing','paused','long','missing','none','unlinked','denied','offline']),resolution:enumOf([2160,1080,720]),selection:{type:'string',maxLength:700},snap:{type:'boolean'},mode:enumOf(['edit','test']),scope:enumOf(['element','template'])}},undo:{type:'array',maxItems:50,items:content},redo:{type:'array',maxItems:50,items:content}}};
+export const validate=new Ajv({allErrors:true}).compile(schema);
+if(process.argv.includes('--stdin')){
+ let input='';for await(const chunk of process.stdin)input+=chunk;
+ try{const ok=validate(JSON.parse(input));process.stdout.write(JSON.stringify({ok,errors:ok?[]:validate.errors}));process.exitCode=ok?0:1;}catch{process.stdout.write(JSON.stringify({ok:false,errors:['Ungültiges JSON']}));process.exitCode=1;}
+}

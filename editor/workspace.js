@@ -78,7 +78,7 @@ export function initWorkspace(api){
  $('importTv').onclick=guarded(async()=>{
   const result=await api.importTv();if(!result)return;
   source(false);$('tvPanel').hidden=true;
-  api.notice('TV '+result.version+' als Entwurf übernommen. Spotify zeigt Beispieldaten. Vorheriger Entwurf unter „Gespeicherte Zwischenstände“.'+(result.sourceMatches?'':' Hinweis: Die Vorschau verwendet eine andere lokale CleanFrame-Version.'));
+  api.notice('TV '+result.version+' als Entwurf übernommen. Spotify zeigt Beispieldaten. Vorheriger Entwurf unter „Gespeicherte Zwischenstände“.'+(result.sourceMatches?'':' Hinweis: Die Vorschau verwendet eine andere lokale CleanTV-Version.'));
  });
  $('draftTab').onclick=()=>source(false);$('liveTab').onclick=()=>source(true);
  $('tvStatus').onclick=()=>{$('tvPanel').hidden=!$('tvPanel').hidden;$('tvStatus').setAttribute('aria-expanded',!$('tvPanel').hidden);if(!$('tvPanel').hidden)status();};

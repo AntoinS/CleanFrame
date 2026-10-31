@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.4 — 2026-10-31
+
+- Rename the visible Android app and Mac editor to CleanTV while retaining package IDs, signing identities, preferences and pairing. Preserve the original CleanFrame entrypoint as an editor-launch compatibility wrapper.
+- Publish the existing repository as CleanTV with German project and add-on documentation, upstream attribution, compatibility limits and public release checks.
+- Include the reviewed iPhone Remote 0.1.2 branding update. Add-on lifecycle and update management from 0.8.3 remain included.
+
 ## 0.8.3 — 2026-10-31
 
 - Separate installed native identity from catalog download verification. Status, settings and uninstall remain available when the catalog or cached descriptor refers to a different version; package and certificate checks remain mandatory.

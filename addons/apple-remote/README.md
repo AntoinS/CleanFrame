@@ -1,6 +1,6 @@
-# CleanFrame iPhone Remote · experimental 0.1.1
+# CleanTV iPhone Remote · experimental 0.1.2
 
-A separate Android app receives authenticated Apple Companion commands and forwards supported keys through the Philips JointSpace service on the same TV. The Mac is not part of the runtime path. All visible setup and device management are integrated into **CleanFrame → Settings → Add-ons → iPhone Remote**. Android owns keyboard/accessibility permissions and app installation dialogs.
+A separate Android app receives authenticated Apple Companion commands and forwards supported keys through the Philips JointSpace service on the same TV. The Mac is not part of the runtime path. All visible setup and device management are integrated into **CleanTV → Settings → Add-ons → iPhone Remote**. Android owns keyboard/accessibility permissions and app installation dialogs.
 
 **Experimental release:** secure pairing and reconnection, Home/YouTube navigation, volume, Play/Pause, and live Spotify typing/deletion/search were confirmed on the reference Philips and iPhone. This is not a general Apple TV implementation. Custom app keyboards, selection replacement, cross-app input, Netflix and the full lifecycle matrix remain unverified. Siri, microphone forwarding and AirPlay streaming are excluded.
 
@@ -16,10 +16,10 @@ Other ABIs require their own build and device validation.
 The existing `.local/editor/toolchain.json` supplies `javaHome`, `sdk`,
 `androidUserHome`, `gradleUserHome`, `gradle` and `signerSha256`. Keep this file and
 all keys local. `androidUserHome/debug.keystore` must already exist and must be
-the host CleanFrame signing key: the Android host interface checks signatures.
+the host CleanTV signing key: the Android host interface checks signatures.
 The builder refuses a missing key and verifies the resulting certificate.
 
-Once the toolchain is installed, run from the CleanFrame checkout:
+Once the toolchain is installed, run from the CleanTV checkout:
 
 ```sh
 python3 scripts/build-apple-remote.py
@@ -39,7 +39,7 @@ configured cache and signing home. Private keys are never copied into staging.
 
 Successful output is under `.local/apple-remote/builds/<timestamp>/`:
 
-- Signed `CleanFrame-Apple-Remote-<version>-experimental.apk` and native library.
+- Signed `CleanTV-Apple-Remote-<version>-experimental.apk` and native library.
 - `manifest.json` with package, version, source hash, APK/library hashes, signing
   certificate, toolchain versions and commands that passed.
 - `inputs.json`, Android reports and `build.log`.
@@ -55,13 +55,13 @@ pass. `deviceTestsPassed`, `approvedForCatalog` and `tvInstalled` stay `false`.
 
 Back up the installed APK, settings and permission state before a TV update.
 Install only the verified artifact, with the same signing key. Opening setup is
-part of confirmed installation through CleanFrame. A first installation activates the receiver; updates retain its disabled/enabled choice. Direct APK sideloading still needs activation in setup.
+part of confirmed installation through CleanTV. A first installation activates the receiver; updates retain its disabled/enabled choice. Direct APK sideloading still needs activation in setup.
 
-1. Open **CleanFrame → Settings → Add-ons → iPhone Remote → Set up** and enable it.
-2. For automatic setup, enable **CleanFrame · Automatic TV setup** once in Android Accessibility through the add-on settings. The service reads only this add-on’s correlated Philips pairing message for up to 30 seconds, sends the normal authenticated confirmation, and does not record screen text or inject input. Existing credentials are reused. The permission can be revoked after setup; normal remote control keeps working. Without the grant, enter the four-digit TV code in the small left-hand CleanFrame sheet.
+1. Open **CleanTV → Settings → Add-ons → iPhone Remote → Set up** and enable it.
+2. For automatic setup, enable **CleanTV · Automatic TV setup** once in Android Accessibility through the add-on settings. The service reads only this add-on’s correlated Philips pairing message for up to 30 seconds, sends the normal authenticated confirmation, and does not record screen text or inject input. Existing credentials are reused. The permission can be revoked after setup; normal remote control keeps working. Without the grant, enter the four-digit TV code in the small left-hand CleanTV sheet.
 3. After initial automatic TV pairing, the time-limited iPhone pairing window opens. You can also open a new window in setup. Select this TV in the
    iPhone's built-in Apple TV Remote and complete its PIN confirmation.
-4. Verify navigation outside CleanFrame, reconnect, Unicode text, field changes,
+4. Verify navigation outside CleanTV, reconnect, Unicode text, field changes,
    volume, Home, service restart and TV restart. Check standby/wake separately.
 5. Remove one pairing and verify that the old client can no longer control it.
    Deactivate the add-on and verify that reception and announcements stop.
@@ -106,7 +106,7 @@ Pinned sources are recorded in [PROVENANCE.json](PROVENANCE.json):
 - **atv-core:** `corvofeng/atv-core` at
   `8a4ada29bb7cad31e0315c3387b277eb9ab8c988`. Its workspace declares MIT. That pinned
   tree contains no separate LICENSE file; this absence is recorded rather than
-  inventing an upstream copyright notice. The CleanFrame fork adds
+  inventing an upstream copyright notice. The CleanTV fork adds
   signature checks, persistent authorization, limits, RTI and lifecycle cleanup.
 - **chromiacast:** `pronkproject/chromiacast` at
   `65a398c7fe1b0b65c5fe9e3455f047eae5b50631`, MIT; original notice retained in

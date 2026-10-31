@@ -9,7 +9,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.util.Log;
 
-/** Philips opens Live TV at boot; open CleanFrame only while it is the selected Home. */
+/** Philips opens Live TV at boot; open CleanTV only while it is the selected Home. */
 public final class BootReceiver extends BroadcastReceiver {
     private static final String TAG = "CleanFrameBoot";
 

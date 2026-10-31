@@ -36,7 +36,7 @@ def freeze(release,project,storage):
     if config.exists():shutil.copy2(config,release/'toolchain.json')
     inputs={str(p.relative_to(source)):digest(p) for p in sorted(source.rglob('*')) if p.is_file() and '.local' not in p.relative_to(source).parts}
     write(release/'inputs.json',inputs)
-    changes=['# CleanFrame TV-Version '+str(version),'','Dieser Stand enthält '+str(len(project['design']['rules']))+' Designanpassungen.','']
+    changes=['# CleanTV TV-Version '+str(version),'','Dieser Stand enthält '+str(len(project['design']['rules']))+' Designanpassungen.','']
     for rule in project['design']['rules']:changes.append('- '+rule['view']+' / '+rule['layout']+' / '+rule['target']+': '+', '.join(k+' = '+str(v) for k,v in rule['style'].items()))
     if patch:changes+=['','## Einstellungen','']+['- '+k+': '+str(v) for k,v in patch.items()]
     changes+=['','Die APK wurde noch nicht auf den TV übertragen. Der genaue Prüfumfang und die Prüfsumme stehen nach erfolgreichem Build in manifest.json.','']
@@ -73,7 +73,7 @@ def run(release):
         verifier=Path(config['sdk'])/'build-tools/35.0.0/apksigner'
         verified=subprocess.run([str(verifier),'verify','--print-certs',str(apk)],env=env,capture_output=True,text=True,check=True)
         if config['signerSha256'].lower() not in verified.stdout.lower():raise RuntimeError('Die APK hat nicht den erwarteten Signierschlüssel. Keine TV-Version freigegeben.')
-        out=release/('CleanFrame-'+version['name']+'.apk');shutil.copy2(apk,out)
+        out=release/('CleanTV-'+version['name']+'.apk');shutil.copy2(apk,out)
         inputs=json.loads((release/'inputs.json').read_text())
         if any(digest(source/path)!=sha for path,sha in inputs.items()):raise RuntimeError('Gesicherte Quelldateien wurden während der Prüfung verändert.')
         manifest={'version':version,'apk':out.name,'sha256':digest(out),'signerSha256':config['signerSha256'],'checks':checks,'sourceManifestSha256':digest(release/'inputs.json'),'designSha256':digest(source/'app/design.json'),'tvInstalled':False,'nativeQr':'Shared frontend with simulated QR state; real QR and native screenshots verified separately.'}

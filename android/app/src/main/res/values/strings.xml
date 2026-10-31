@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">CleanFrame</string>
-    <string name="starting">CleanFrame is starting…</string>
-    <string name="load_failed">CleanFrame could not be displayed.</string>
+    <string name="app_name" translatable="false">CleanTV</string>
+    <string name="starting">CleanTV is starting…</string>
+    <string name="load_failed">CleanTV could not be displayed.</string>
     <string name="open_original_home">Open original Home</string>
     <string name="spotify_qr_description">Spotify sign in QR code</string>
     <string name="spotify_connect">Connect Spotify</string>
@@ -14,7 +14,7 @@
     <string name="spotify_expired">The QR code has expired. Open sign in again.</string>
     <string name="spotify_cancelled">Sign in was cancelled. Your existing connection is unchanged.</string>
     <string name="spotify_connected">Spotify is connected</string>
-    <string name="spotify_returning">Returning to CleanFrame shortly.</string>
+    <string name="spotify_returning">Returning to CleanTV shortly.</string>
     <string name="spotify_failed">Could not finish connecting. Open sign in again. Your existing connection is unchanged.</string>
 </resources>
 

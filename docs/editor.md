@@ -1,6 +1,6 @@
 # CleanFrame Editor
 
-Open `CleanFrame Editor.command` with a double click. The editor runs at
+Open `CleanTV Editor.command` with a double click. The editor runs at
 http://127.0.0.1:4797/editor/ and uses the actual packaged UI. The draft uses
 synthetic data; the separate Live view receives continuous video from the configured TV.
 Nothing is automatically installed. Keep its terminal window open while using

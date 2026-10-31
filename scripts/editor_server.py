@@ -207,7 +207,7 @@ def run():
     parser=argparse.ArgumentParser();parser.add_argument('--port',type=int,default=4797);parser.add_argument('--storage',type=Path,default=ROOT/'.local/editor');parser.add_argument('--open',action='store_true');parser.add_argument('--public-fonts',action='store_true');args=parser.parse_args()
     server=PreviewServer(('127.0.0.1',args.port),Editor);server.include_private_fonts=not args.public_fonts;server.store=Store(args.storage.resolve())
     url='http://127.0.0.1:'+str(server.server_port)+'/editor/'
-    print('CleanFrame editor: '+url,flush=True)
+    print('CleanTV editor: '+url,flush=True)
     if args.open:
         import webbrowser
         webbrowser.open(url)

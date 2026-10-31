@@ -24,7 +24,23 @@
   setScenario(scenario);
   let link = {phase:"idle"};
   const ok=()=>'{"ok":true}';
+  const version=boot.softwareVersion||'0.8.3',code=boot.softwareVersionCode||24;
+  let software={current:{name:'CleanFrame',version,versionName:version+'-android'+code,versionCode:code},available:null,checkedAt:0,busy:false,error:'',pending:{},simulated:true};
+  const publishSoftware=()=>window.dispatchEvent(new CustomEvent('cleanframe:software',{detail:JSON.parse(JSON.stringify(software))}));
+  function softwareRequest(input){
+    const {action}=JSON.parse(input);
+    if(action==='state')return JSON.stringify(software);
+    if(software.busy)return JSON.stringify({error:'Simulation operation in progress'});
+    software.busy=true;software.error='';publishSoftware();
+    setTimeout(()=>{
+      if(action==='refresh'){software.available={version:'9.0.0',versionCode:999,notes:'Simulation: Neue Funktionen und Verbesserungen.'};software.checkedAt=Date.now();software.updateAvailable=software.current.versionCode<999;}
+      if(action==='install'){Object.assign(software.current,{version:'9.0.0',versionCode:999,versionName:'9.0.0-android999'});software.updateAvailable=false;software.result='installed';}
+      software.busy=false;publishSoftware();
+    },300);return ok();
+  }
+  window.CleanFrameSoftwareMock={state:()=>structuredClone(software),set(value){Object.assign(software,value);publishSoftware();}};
   window.CleanFrameNative={
+    software:softwareRequest,
     apps:()=>JSON.stringify(apps),spotifyState:()=>JSON.stringify(media),spotifyObserve:ok,
     launchApp:id=>{calls.push(['launch',id]);notice('Vorschau: '+(apps.find(a=>a.appId===id)?.name||id)+' öffnen');return ok();},
     home:()=>{notice('Vorschau: ursprünglichen Startbildschirm öffnen');return ok();},settings:()=>{notice('Vorschau: Android Einstellungen öffnen');return ok();},

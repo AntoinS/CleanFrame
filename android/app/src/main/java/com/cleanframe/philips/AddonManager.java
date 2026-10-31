@@ -65,6 +65,7 @@ final class AddonManager implements AutoCloseable {
             }
         } catch (Exception failure) { error = "Add-on storage could not be read."; }
     }
+    synchronized boolean operating() { return busy || batch.active() || pendingOperation(); }
     synchronized boolean enabled(String id) {
         JSONObject item = installed.optJSONObject(id);
         return item != null && item.optBoolean("enabled", true);

@@ -61,3 +61,22 @@ test('Android excludes Samsung Art Mode and web previews gain no native access',
   vm.runInNewContext(source, { window });
   assert.equal(window.FrameDevice, undefined);
 });
+
+
+test('package status errors retain fresh installation state after cancellation', () => {
+  const snapshot={installed:{spotify:{enabled:false}},catalog:[],busy:false,pending:{},error:'Package operation cancelled.'};
+  const h=harness([], {addons:request=>JSON.stringify(JSON.parse(request).action==='state'?snapshot:{error:'Operation denied'})});
+  const state=h.device.addons({action:'state'});
+  assert.equal(state.busy,false);assert.equal(state.pending.status,undefined);assert.equal(state.installed.spotify.enabled,false);
+  assert.equal(state.error,'Package operation cancelled.');
+  assert.throws(()=>h.device.addons({action:'install',id:'spotify'}),/Operation denied/);
+});
+
+test('software state exposes actual version and recoverable errors but rejects failed commands', () => {
+  const h=harness([], {software:request=>JSON.stringify(JSON.parse(request).action==='state'?{current:{version:'0.8.3',versionCode:24},busy:false,pending:{},error:'cancelled'}:{error:'Installation denied'})});
+  assert.equal(h.device.software({action:'state'}).current.versionCode,24);
+  assert.equal(h.device.software({action:'state'}).error,'cancelled');
+  assert.throws(()=>h.device.software({action:'install'}),/Installation denied/);
+  const broken=harness([], {software:()=>JSON.stringify({error:'No state'})});
+  assert.throws(()=>broken.device.software({action:'state'}),/No state/);
+});

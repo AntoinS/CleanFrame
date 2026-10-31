@@ -12,9 +12,9 @@
   var DEFAULTS = ['com.netflix.ninja', 'com.google.android.youtube.tv',
     'com.amazon.amazonvideo.livingroom', 'com.disney.disneyplus',
     'com.apple.atve.androidtv.appletv', 'com.spotify.tv.android', 'tv.twitch.android.app'];
-  function invoke(method, args) {
+  function invoke(method, args, stateKey) {
     var value = JSON.parse(args && args.length ? native[method](args[0]) : native[method]());
-    if (!value || value.error) throw new Error(value && value.error || 'The TV returned no result.');
+    if (!value || value.error && (!stateKey || !value[stateKey])) throw new Error(value && value.error || 'The TV returned no result.');
     return value;
   }
   function installed() {
@@ -43,7 +43,8 @@
       signOut: function (done) { action('spotifySignOut', [], done); }
     },
     remotePermission: function (operation, done) { action('remotePermission', [operation], done); },
-    addons: typeof native.addons === 'function' ? function (request) { return invoke('addons', [JSON.stringify(request)]); } : null,
+    addons: typeof native.addons === 'function' ? function (request) { return invoke('addons', [JSON.stringify(request)], request.action === 'state' ? 'installed' : null); } : null,
+    software: typeof native.software === 'function' ? function (request) { return invoke('software', [JSON.stringify(request)], request.action === 'state' ? 'current' : null); } : null,
     defaultApps: function () {
       var entries;
       try { entries = installed(); } catch (err) { return []; }

@@ -58,7 +58,7 @@ def run(release):
         command(['python3','scripts/test-editor-tools.py'],env)
         command(['python3','scripts/test-editor-workspace.py'],env)
         command(['npm','run','check:browser'],env,360)
-        for script in ['check-android-browser.mjs','check-spotify-browser.mjs','check-options-browser.mjs','check-editor.mjs','check-editor-workspace.mjs','check-editor-import.mjs','check-addons-browser.mjs','check-editor-addons.mjs','check-addon-setup.mjs']:
+        for script in ['check-android-browser.mjs','check-spotify-browser.mjs','check-options-browser.mjs','check-editor.mjs','check-editor-workspace.mjs','check-editor-import.mjs','check-addons-browser.mjs','check-editor-addons.mjs','check-addon-setup.mjs','check-software-browser.mjs']:
             command(['node','scripts/'+script],env,360)
         custom=env.copy();custom.pop('CLEANFRAME_BASELINE_DESIGN',None)
         command(['node','scripts/capture-editor.mjs',str(release)],custom,240)

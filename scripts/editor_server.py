@@ -155,7 +155,7 @@ class Editor(Preview):
             path=store.path/'releases'/str(store.job)/'status.json'
             return self.json(json.loads(path.read_text()) if store.job and path.exists() else {'state':'idle'})
         if route=='/home/' and parse_qs(urlsplit(self.path).query).get('editor')==['1']:
-            project,_=store.read();boot=json.dumps({'preferences':project['preferences'],'scenario':project['ui'].get('scenario','playing'),'tvSource':project.get('tvSource'),'addonLab':project.get('addonLab')},ensure_ascii=False).replace('<','\\u003c')
+            project,_=store.read();boot=json.dumps({'preferences':project['preferences'],'scenario':project['ui'].get('scenario','playing'),'tvSource':project.get('tvSource'),'addonLab':project.get('addonLab'),'softwareVersion':json.loads((ROOT/'package.json').read_text())['version'],'softwareVersionCode':json.loads((ROOT/'package.json').read_text())['cleanframe']['androidVersionCode']},ensure_ascii=False).replace('<','\\u003c')
             raw=(ROOT/'app/index.html').read_text().replace('<script src="android-device.js">','<script>window.CleanFrameEditorBoot='+boot+';</script><script src="/editor/mock.js"></script><script src="/editor/addon-mock.js"></script><script src="android-device.js">').replace('</body>','<script src="/editor/qr-preview.js"></script></body>').encode()
             self.send_response(200);self.send_header('Content-Type','text/html; charset=utf-8');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
         if route.startswith('/api/') or not (route.startswith('/home/') or route.startswith('/build/') or route=='/'):

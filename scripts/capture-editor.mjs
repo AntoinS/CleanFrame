@@ -8,7 +8,7 @@ const out=join(release,'previews');mkdirSync(out,{recursive:true});
 const app=await openEditor(join(root,'.local/editor'));
 const page=await app.browser.newPage({viewport:{width:1600,height:1000}}),errors=[],reports=[];
 page.on('pageerror',error=>errors.push(error.message));
-const views=['home','settings','apps','editor','wallpaper','appearance.background','appearance.layout','appearance.typography','appearance.focus','appearance.rotation','appearance.clock','appearance.spotify','appearance.language','appearance.samsung','message.leave','message.signout','message.error','qr'];
+const views=['appearance.software','home','settings','apps','editor','wallpaper','appearance.background','appearance.layout','appearance.typography','appearance.focus','appearance.rotation','appearance.clock','appearance.spotify','appearance.language','appearance.samsung','message.leave','message.signout','message.error','qr'];
 try{
  await page.goto(app.url+'/editor/');await ready(page);await page.selectOption('#scenario','playing');
  for(const resolution of [2160,1080,720])for(const language of ['de','en'])for(const layout of ['dock','list']){

@@ -3,6 +3,7 @@
   'use strict';
   var ANDROID = window.FrameDevice && window.FrameDevice.platform === 'android';
   var ADDONS = window.CleanFrameAddons;
+  var SOFTWARE = window.CleanFrameSoftware;
   var SETUP = window.CleanFrameAddonSetup;
   var SPOTIFY = !!(ANDROID && FrameDevice.capabilities.spotify);
   var spotifyState = { status: 'idle' }, spotifyAt = 0, spotifyTimer = 0, spotifyObserving = null;
@@ -526,10 +527,11 @@
     else openSettings();
   }
   function addAppsRoute() { openEditor('home'); }
-  function openSettings() { push({ id: 'settings', f: { id: S.settingsFocus } }); }
+  function openSettings() { if (ANDROID) SOFTWARE.check(); push({ id: 'settings', f: { id: S.settingsFocus } }); }
   function openAppearance(group) {
     var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', clock: 'dateVisible', spotify: 'spotifyEnabled', language: 'language' }[group];
     var action = S.detailFocus[group] || (axis ? 'choice.' + axis + '.' + S.c[axis] : group === 'rotation' ? 'rotation.' + S.c.mode : 'samsung.home');
+    if (group === 'software') SOFTWARE.check();
     push({ id: 'appearance', group: group, f: { action: action } });
   }
   function openMessage(key) { push({ id: 'message', msg: key, f: { b: 0 } }); }
@@ -869,7 +871,8 @@
       { id: 'homescreen', label: 'Home screen', value: translate(VALUE_NAMES[S.c.layout]) + ' · ' + S.c.home.length + ' apps' },
       { id: 'addons', label: 'Add-ons', value: translate('Widgets and extensions') },
       { id: 'language', label: 'Language', value: S.c.language === 'de' ? 'Deutsch' : 'English' },
-      { id: 'samsung', label: DEVICE_LABEL, value: translate('Picture, sound and network settings') }
+      { id: 'samsung', label: DEVICE_LABEL, value: translate('Picture, sound and network settings') },
+      { id: 'software', label: 'Software update', value: SOFTWARE.footer() }
     ];
   }
   function settingsIds() { return settingsRows().map(function (r) { return r.id; }); }
@@ -890,7 +893,7 @@
     if (id === 'editor') openEditor('settings');
     else openAppearance(id);
   }
-  var DETAIL_NAMES = { remote: 'iPhone Remote', 'spotify-link': 'Spotify', display: 'Display', homescreen: 'Home screen', addons: 'Add-ons', 'addon-detail': 'Add-ons', background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: DEVICE_LABEL, clock: 'Clock and date', spotify: 'Spotify', language: 'Language' };
+  var DETAIL_NAMES = { software: 'Software update', remote: 'iPhone Remote', 'spotify-link': 'Spotify', display: 'Display', homescreen: 'Home screen', addons: 'Add-ons', 'addon-detail': 'Add-ons', background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: DEVICE_LABEL, clock: 'Clock and date', spotify: 'Spotify', language: 'Language' };
   function choice(axis, value, disabled) {
     return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled,
       label: typeof value === 'boolean' ? value ? translate('On') : translate('Off') : axis === 'font' ? FONTS[value].name : axis === 'mode' ? MODES.filter(function (m) { return m.id === value; })[0].name : value === 'both' ? translate('Both') : VALUE_NAMES[value] };
@@ -899,6 +902,7 @@
     var flat = S.c.bg !== 'photo', inactive = !materialApplies();
     function options(axis, values, disabled) { return values.map(function (value) { return choice(axis, value, disabled); }); }
     function link(group, description) { return { action: 'group.' + group, label: translate(DETAIL_NAMES[group] || 'Apps on Home'), description: translate(description) }; }
+    if (t.group === 'software') return SOFTWARE.sections(S.c.language);
     if (t.group === 'remote' || t.group === 'spotify-link') return SETUP.sections(t.group, S.c.language);
     if (t.group === 'display') return [{ id: 'display', title: translate('Appearance'), items: [
       link('background', 'Wallpaper, colour and rotation'),
@@ -1025,7 +1029,7 @@
   function detailRows(t) {
     var rows = [[{ action: 'settings.back', label: detailParentName() }]];
     detailSections(t).forEach(function (section) {
-      var enabled = section.items.filter(function (item) { return t.group === 'addons' || t.group === 'addon-detail' || t.group === 'remote' || !item.disabled; });
+      var enabled = section.items.filter(function (item) { return t.group === 'addons' || t.group === 'addon-detail' || t.group === 'remote' || t.group === 'software' || !item.disabled; });
       if (section.horizontal && enabled.length) rows.push(enabled);
       else enabled.forEach(function (item) { rows.push([item]); });
     });
@@ -1071,6 +1075,7 @@
     } else if (item.axis === 'mode') applyRotation(item.value);
     else if (HOME_OPTIONS.indexOf(item.axis) >= 0) applyHomeOption(item.axis, item.value);
     else if (item.axis) { patch[item.axis] = item.value; setLook(patch, { row: item.axis }); }
+    else if (item.action.indexOf('software.') === 0) SOFTWARE.request(item.action.substring(9));
     else if (item.action.indexOf('addon.') === 0) {
       var parts = item.action.split('.'), addon = addonItem(parts.slice(2).join('.'), ADDONS.state());
       if (parts[1] === 'tab') { t.addonTab = parts[2]; t.addonScroll = 0; }
@@ -1212,7 +1217,7 @@
     var t = top(), sheet = !!V[t.id].sheet, shown = wall(S.shown ? S.shown.wall : S.c.wall), palette = ADAPTIVE_INK[shown.id];
     var adaptive = applyAdaptiveInk(palette), tr = adaptive && palette.tr ? palette.tr.pol : shown.ut.tr, br = adaptive && palette.br ? palette.br.pol : shown.ut.br;
     stage.className = (ANDROID ? 'stage is-android bg-' : 'stage bg-') + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '') + (spotifyVisible() ? ' has-spotify' : '') + (spotifyExpanded() ? ' spotify-focused' : '') + ' cp-' + S.c.controlsPosition + (utilsStacked() ? ' util-stacked' : '') + (utilsTop() ? ' util-at-top' : ' util-at-bottom');
-    if (t.id === 'appearance' && (t.group === 'addons' || t.group === 'addon-detail' || t.group === 'remote' || t.group === 'spotify-link')) stage.className += ' is-addon-manager';
+    if (t.id === 'appearance' && (t.group === 'addons' || t.group === 'addon-detail' || t.group === 'remote' || t.group === 'spotify-link' || t.group === 'software')) stage.className += ' is-addon-manager';
     if (!adaptive && shown.clockInk) stage.style.setProperty('--clock-ink', shown.clockInk);
     else stage.style.removeProperty('--clock-ink');
     if (!adaptive && shown.dockClockInk) stage.style.setProperty('--dock-clock-ink', shown.dockClockInk);
@@ -1742,6 +1747,24 @@
     setHTML(appearanceStatus, status);
     setHTML(appearanceDesc, '<span class="remote-key">OK</span><span>' + esc(addonText(t.group === 'addons' ? 'Choose an extension' : 'Manage extension')) + '</span>');
   }
+  function renderSoftwareUpdate(t, command) {
+    var state = SOFTWARE.state(), current = state.current, available = state.available, content = '';
+    function text(value) { return SOFTWARE.text(S.c.language, value); }
+    function fact(label, value) { return '<section class="addon-fact"><h3>' + esc(text(label)) + '</h3><p>' + esc(String(value || '—')) + '</p></section>'; }
+    appearanceRows.className = 'appearance-rows addon-manager software-manager';
+    appearanceTitle.textContent = text('Software update');
+    content += '<section class="addon-summary"><span class="addon-icon"><img class="software-icon" src="icon.png" alt=""></span><span class="addon-summary-copy"><span class="setting-name">' + esc(current.name) + '</span><span class="addon-status">' + esc(SOFTWARE.status(S.c.language)) + '</span></span></section>';
+    content += '<section class="setting-section is-horizontal"><div class="setting-options">' + SOFTWARE.sections(S.c.language)[0].items.map(function (item) { return command(item, '<span>' + esc(item.label) + '</span>', 'addon-action'); }).join('') + '</div></section>';
+    content += '<section class="addon-metadata">' + fact('Installed version', current.version) + fact('Build', current.versionCode) + (state.updateAvailable && available ? fact('Available version', available.version) + fact('Build', available.versionCode) : '') + '</section>';
+    if (available && available.notes) content += '<p class="software-notes">' + esc(available.notes) + '</p>';
+    if (state.compatible === false) content += '<p class="setting-error">' + esc(text('This update requires a newer Android version.')) + '</p>';
+    if (state.addonsBusy) content += '<p class="addon-update-note">' + esc(text('Finish the add-on operation first.')) + '</p>';
+    content += '<p class="addon-update-note">' + esc(text(state.simulated ? 'Simulation only. No TV download or installation.' : 'Settings, apps, sign-ins and the selected Home remain unchanged. Android confirms the installation.')) + '</p>';
+    content += '<p class="addon-update-note">' + esc(text('After installation, press Home to open the updated interface.')) + '</p>';
+    setHTML(appearanceRows, content);
+    setHTML(appearanceStatus, state.error ? '<p class="setting-error">' + esc(SOFTWARE.status(S.c.language)) + '</p>' : '');
+    setHTML(appearanceDesc, '<span class="remote-key">OK</span><span>' + esc(text('Software update')) + '</span>');
+  }
   function renderAddonSetup(t, command) {
     var copy = SETUP.copy(S.c.language), link = SETUP.link(), scroll = appearanceRows.scrollTop, remote = t.group === 'remote';
     function text(de, en) { return S.c.language === 'de' ? de : en; }
@@ -1775,6 +1798,7 @@
         + (item.axis ? '<span class="setting-tick" aria-hidden="true">' + (applied ? icon('check') : '') + '</span>' : '') + '</button>';
     }
     setHTML(appearanceBack, command({ action: 'settings.back', label: detailParentName() }, icon('left') + '<span>' + (detailParentName()) + '</span>', 'setting-back'));
+    if (t.group === 'software') { renderSoftwareUpdate(t, command); return; }
     if (t.group === 'addons' || t.group === 'addon-detail') { renderAddonManager(t, command); return; }
     if (t.group === 'remote' || t.group === 'spotify-link') { renderAddonSetup(t, command); return; }
     setHTML(appearanceRows, detailSections(t).map(function (section) {
@@ -1903,7 +1927,7 @@
         + "<div class=\"ed-home\" data-slot=\"home\"></div><div class=\"ed-order-break\" data-slot=\"break\">" + translate("Then scroll") + "</div><div class=\"ed-other-view\" data-slot=\"ov\"><div class=\"ed-other\" data-slot=\"other\"></div></div><div class=\"ed-origin\" data-slot=\"origin\"></div>"
         + '<div class="row-cue editor-before" data-slot="otherBefore" aria-hidden="true">' + icon('up') + '</div><div class="row-cue editor-after" data-slot="otherAfter" aria-hidden="true">' + icon('down') + '</div>';
     },
-    settings: function () { return "<h2 class=\"s-title\">" + translate("Settings") + "</h2><div class=\"settings-overview has-extras\" data-slot=\"list\"></div><p class=\"settings-overview-hint\"><span class=\"remote-key\">OK</span><span>" + translate("Open selected group") + "</span></p>"; },
+    settings: function () { return "<h2 class=\"s-title\">" + translate("Settings") + "</h2><div class=\"settings-overview has-extras\" data-slot=\"list\"></div><p class=\"settings-overview-hint\"><span class=\"remote-key\">OK</span><span>" + translate("Open selected group") + "</span></p><div class=\"settings-version\" data-slot=\"version\"></div>"; },
     message: function (t) {
       var m = messageContent(t);
       return '<h2 class="msg-title">' + esc(translate(m.title)) + '</h2><p class="msg-line">' + esc(translate(m.line)) + '</p><p class="msg-note">' + esc(translate(m.note)) + '</p><div class="msg-acts" data-slot="acts"></div>';
@@ -1997,9 +2021,11 @@
     settings: function (t, el) {
       var html = '';
       settingsRows().forEach(function (r) {
+        if (r.id === 'software') return;
         html += '<button type="button" tabindex="-1" class="settings-group' + (r.id === t.f.id ? ' is-focus' : '') + '" data-z="row" data-i="0" data-id="' + r.id + '" data-action="settings.' + (r.id === 'editor' ? 'editor' : 'group.' + r.id) + '"><span class="settings-group-copy"><span class="settings-group-name">' + esc(translate(r.label)) + (r.id === 'addons' && ADDONS.updates().length ? '<span class="addon-update-dot" role="img" aria-label="' + esc(addonText('Update available')) + '"></span>' : '') + '</span><span class="settings-group-value">' + esc(translate(r.value)) + '</span></span>' + icon('right') + '</button>';
       });
       setHTML(el.list, html);
+      setHTML(el.version, ANDROID ? '<button type="button" tabindex="-1" class="settings-version-button' + (t.f.id === 'software' ? ' is-focus' : '') + '" data-z="row" data-i="0" data-id="software" data-action="settings.group.software"><span>' + esc(SOFTWARE.footer()) + '</span>' + (SOFTWARE.state().updateAvailable ? '<span class="addon-update-dot" aria-label="' + esc(SOFTWARE.text(S.c.language, 'Update available')) + '"></span>' : '') + icon('right') + '</button>' : '');
     },
     message: function (t, el) {
       setHTML(el.acts, messageContent(t).actions.map(function (a, i) {
@@ -2303,6 +2329,7 @@
   }
   window.addEventListener('cleanframe:open-addon', openRequestedAddon);
   window.setTimeout(openRequestedAddon, 1000);
+  window.addEventListener('cleanframe:software', function () { if (S.c) { norm(); render(); } });
   window.addEventListener('cleanframe:addons', function () { if (S.c) { norm(); render(); } });
   window.addEventListener('cleanframe:spotify', function (event) { if (SPOTIFY) receiveSpotify(event.detail); });
 

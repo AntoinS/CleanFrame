@@ -2,7 +2,7 @@
 import Ajv from 'ajv';
 const range = (minimum, maximum) => ({type:'number',minimum,maximum});
 const enumOf = values => ({enum:values});
-export const scenes = ['home','apps','settings','editor','wallpaper','qr','message.leave','message.signout','message.addonRemove','message.error',...['display','homescreen','addons','addon-detail','remote','spotify-link','background','layout','typography','focus','rotation','samsung','clock','spotify','language'].map(x=>'appearance.'+x)];
+export const scenes = ['home','apps','settings','editor','wallpaper','qr','message.leave','message.signout','message.addonRemove','message.error',...['software','display','homescreen','addons','addon-detail','remote','spotify-link','background','layout','typography','focus','rotation','samsung','clock','spotify','language'].map(x=>'appearance.'+x)];
 export const prefProperties = {
  bg:enumOf(['photo','dark','light']),wall:{type:'string',pattern:'^[a-z0-9-]{1,40}$'},layout:enumOf(['dock','list']),apps:enumOf(['icons','text','both']),font:enumOf(['manrope','geist','newsreader','montreal','mori','pangram']),controls:enumOf(['icons','text','both']),focus:enumOf(['glass','type']),material:enumOf(['soft','frost','tint']),mode:enumOf(['fixed','open','5','15','60']),dateVisible:{type:'boolean'},spotifyEnabled:{type:'boolean'},spotifySurface:enumOf(['dark','light','cover']),spotifyTransparency:range(0,100),controlsPosition:enumOf(['auto','top','bottom']),language:enumOf(['de','en']),home:{type:'array',maxItems:24,uniqueItems:true,items:{type:'string',pattern:'^[A-Za-z0-9_.-]{1,180}$'}}
 };

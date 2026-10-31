@@ -60,6 +60,7 @@ public final class MainActivity extends Activity {
     private SpotifyMedia spotify;
     private volatile SpotifySignInSession spotifySignIn;
     private AddonManager addons;
+    private SoftwareUpdateManager software;
     private boolean resumed;
 
     @Override
@@ -115,6 +116,9 @@ public final class MainActivity extends Activity {
     private void createWebView() {
         if (addons == null) addons = new AddonManager(this, () -> runOnUiThread(() -> {
             if (webView != null && !isDestroyed()) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('cleanframe:addons',{detail:" + addons.state() + "}));", null);
+        }));
+        if (software == null) software = new SoftwareUpdateManager(this, addons::operating, () -> runOnUiThread(() -> {
+            if (webView != null && !isDestroyed()) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('cleanframe:software',{detail:" + software.state() + "}));", null);
         }));
         spotify = new SpotifyMedia(this, state -> {
             if (webView != null) webView.evaluateJavascript(
@@ -299,7 +303,17 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public String addons(String request) { return addons.request(request); }
+        public String addons(String request) {
+            try {
+                String action = new JSONObject(request).optString("action");
+                if (software != null && software.operating() && action.matches("install|remove|updateAll"))
+                    return "{\"error\":\"A software update is running.\"}";
+            } catch (Exception invalid) { return "{\"error\":\"Invalid add-on request.\"}"; }
+            return addons.request(request);
+        }
+
+        @JavascriptInterface
+        public String software(String request) { return software.request(request); }
 
         @JavascriptInterface
         public String spotifyState() { return spotify.state(); }
@@ -476,6 +490,7 @@ public final class MainActivity extends Activity {
         super.onResume();
         resumed = true;
         if (addons != null) addons.resume();
+        if (software != null) software.resume();
         if (spotify != null) spotify.resume(true);
         if (webView != null) {
             webView.onResume();
@@ -521,6 +536,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (addons != null) addons.close();
+        if (software != null) software.close();
         if (spotify != null) { spotify.close(); spotify = null; }
         if (unlockReceiver != null) {
             unregisterReceiver(unlockReceiver);

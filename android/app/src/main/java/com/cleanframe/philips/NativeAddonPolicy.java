@@ -23,8 +23,9 @@ final class NativeAddonPolicy {
         validateUrl(item.getString("apkUrl"));
     }
 
-    static void validateUrl(String value) throws IOException {
-        if (!value.matches(java.util.regex.Pattern.quote(RELEASES) + "[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*\\.apk"))
+    static void validateUrl(String value) throws IOException { validateReleaseUrl(value, RELEASES); }
+    static void validateReleaseUrl(String value, String releaseBase) throws IOException {
+        if (!value.matches(java.util.regex.Pattern.quote(releaseBase) + "[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*\\.apk"))
             throw new IOException("APK must be a reviewed CleanTV release asset.");
     }
 

@@ -29,4 +29,4 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           python -c 'import json,os; assert os.environ["RELEASE_TAG"] == "v"+json.load(open("package.json"))["version"]'
-          gh release create "$RELEASE_TAG" --verify-tag --draft --title "CleanFrame $RELEASE_TAG" --notes-file CHANGELOG.md
+          gh release create "$RELEASE_TAG" --verify-tag --draft --title "CleanTV $RELEASE_TAG" --notes-file CHANGELOG.md

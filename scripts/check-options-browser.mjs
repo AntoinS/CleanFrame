@@ -72,7 +72,9 @@ try{
   await group('language');await act('choice.language.'+lang);
   for(const name of ['layout','spotify','clock','focus','background','samsung']){
    await group(name);
-   const bad=await page.locator('#appearanceRows .setting-choice').evaluateAll(els=>els.filter(el=>{const b=el.getBoundingClientRect(),copy=el.querySelector('.setting-copy');return b.bottom>document.getElementById('appearanceDesc').getBoundingClientRect().top||(copy&&copy.scrollWidth>copy.clientWidth+2);}).map(el=>el.textContent));
+   // Headless Linux may finish loading the UI font after the scene is mounted.
+   await page.evaluate(async()=>{await document.fonts.ready;await new Promise(requestAnimationFrame);});
+   const bad=await page.locator('#appearanceRows .setting-choice').evaluateAll(els=>els.filter(el=>{const b=el.getBoundingClientRect(),copy=el.querySelector('.setting-copy');return b.bottom>document.getElementById('appearanceDesc').getBoundingClientRect().top||(copy&&copy.scrollWidth>copy.clientWidth+2);}).map(el=>({text:el.textContent,bounds:el.getBoundingClientRect().toJSON(),copyWidth:el.querySelector('.setting-copy')?.clientWidth,copyScroll:el.querySelector('.setting-copy')?.scrollWidth,footer:document.getElementById('appearanceDesc').getBoundingClientRect().top})));
    assert.deepEqual(bad,[],`${width} ${lang} ${name}`);
    if(name==='spotify')await page.screenshot({path:out+`options-spotify-${lang}-${width}.png`,animations:'disabled'});
   }

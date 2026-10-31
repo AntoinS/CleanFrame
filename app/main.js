@@ -1,4 +1,4 @@
-/* CleanFrame Home. Static materials, local preferences and public Tizen app controls. */
+/* CleanTV Home. Static materials, local preferences and public Tizen app controls. */
 (function () {
   'use strict';
   var ANDROID = window.FrameDevice && window.FrameDevice.platform === 'android';
@@ -1101,7 +1101,7 @@
         if (device) push({ id: 'message', msg: 'remoteForget', deviceId: device.id, content: { title: S.c.language === 'de' ? 'Kopplung entfernen?' : 'Remove pairing?', line: S.c.language === 'de' ? 'Dieses iPhone muss anschließend erneut gekoppelt werden.' : 'This iPhone will need to pair again.', actions: [['back', translate('Cancel')], ['remoteForget', translate('Remove')]] }, f: { b: 0 } });
       } else SETUP.command(operation);
     }
-    else if (item.action === 'spotify.signout') push({ id: 'message', msg: 'signout', content: { title: translate('Sign out of Spotify?'), line: translate('Disconnect your Spotify account from CleanFrame.'), note: translate('The Spotify app stays signed in and music keeps playing.'), actions: [['back', translate('Cancel')], ['signout', translate('Sign out')]] }, f: { b: 0 } });
+    else if (item.action === 'spotify.signout') push({ id: 'message', msg: 'signout', content: { title: translate('Sign out of Spotify?'), line: translate('Disconnect your Spotify account from CleanTV.'), note: translate('The Spotify app stays signed in and music keeps playing.'), actions: [['back', translate('Cancel')], ['signout', translate('Sign out')]] }, f: { b: 0 } });
     else if (item.action === 'spotify.open') perform('Spotify', function (done) { FrameDevice.launchApp('com.spotify.tv.android', done); });
   }
   V.appearance = {
@@ -1293,7 +1293,7 @@
     }, 2500);
   }
   function spotifyStatus() {
-    if (!spotifyState.permission) return translate('Android grants access for all apps. CleanFrame only uses Spotify media information.');
+    if (!spotifyState.permission) return translate('Android grants access for all apps. CleanTV only uses Spotify media information.');
     if (spotifyState.errorMessage) return spotifyState.errorMessage;
     if (spotifyState.webApi === 'unlinked') return translate('Sign in with QR to enable controls.');
     if (spotifyState.connection === 'unavailable') return translate('Spotify could not connect. Open Spotify once, then return Home.');

@@ -16,7 +16,7 @@ final class PhilipsPairCapture {
     synchronized String arm(long now) {
         marker = "[CF-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12) + "]";
         deadline = now + 30000; consumed = false;
-        return "CleanFrame iPhone Remote " + marker;
+        return "CleanTV iPhone Remote " + marker;
     }
     synchronized boolean active(long now) { return !marker.isEmpty() && !consumed && now < deadline; }
     synchronized Code take(String packageName, CharSequence text, long now) {

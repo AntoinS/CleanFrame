@@ -174,10 +174,10 @@ public final class RemoteService extends Service {
         Intent target = codeEntry ? hostPairIntent() : new Intent(this, SetupActivity.class);
         PendingIntent setup = PendingIntent.getActivity(this, codeEntry ? 1 : 0, target, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification.Builder notification = new Notification.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.remote_icon).setContentTitle("CleanFrame iPhone Remote")
-            .setContentText(codeEntry ? "Philips code ready · open CleanFrame code entry" : "Receiver enabled · open to manage paired devices")
+            .setSmallIcon(R.drawable.remote_icon).setContentTitle("CleanTV iPhone Remote")
+            .setContentText(codeEntry ? "Philips code ready · open CleanTV code entry" : "Receiver enabled · open to manage paired devices")
             .setContentIntent(setup).setOngoing(true);
-        if (codeEntry) notification.addAction(new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, R.drawable.remote_icon), "CleanFrame · Philips-Code eingeben", setup).build());
+        if (codeEntry) notification.addAction(new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, R.drawable.remote_icon), "CleanTV · Philips-Code eingeben", setup).build());
         startForeground(1, notification.build());
     }
 
@@ -336,7 +336,7 @@ public final class RemoteService extends Service {
             try { startActivity(hostPairIntent()); }
             catch (RuntimeException unavailable) {
                 // A notification tap is the explicit, system-approved fallback for BAL restrictions.
-                serviceError = "Open the CleanFrame notification to enter the Philips code.";
+                serviceError = "Open the CleanTV notification to enter the Philips code.";
             }
         }, automaticPairing ? 2500 : 0);
     }
@@ -348,13 +348,13 @@ public final class RemoteService extends Service {
         String[] names = packages.getPackagesForUid(uid);
         if (names == null || !Arrays.asList(names).contains(HOST)
             || packages.checkSignatures(HOST, getPackageName()) != PackageManager.SIGNATURE_MATCH)
-            throw new SecurityException("Only the signed CleanFrame host can control this add-on.");
+            throw new SecurityException("Only the signed CleanTV host can control this add-on.");
     }
 
     private JSONObject state(boolean diagnostics) {
         try {
             JSONObject state = new JSONObject(cached);
-            state.put("api", 1).put("package", getPackageName()).put("version", "0.1.1").put("enabled", isEnabled(this));
+            state.put("api", 1).put("package", getPackageName()).put("version", "0.1.2").put("enabled", isEnabled(this));
             state.put("codeEntryAvailable", pairCodeWindow.available(SystemClock.elapsedRealtime()));
             state.put("backend", "philips");
             state.put("automaticPairingAccess", PhilipsPairingAccessibility.connected()).put("automaticPairings", automaticPairings);

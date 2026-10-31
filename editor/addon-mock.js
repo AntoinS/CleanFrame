@@ -2,8 +2,8 @@
 (() => {
   const boot=window.CleanFrameEditorBoot,copy=value=>JSON.parse(JSON.stringify(value));
   const catalog=[
-    {id:'spotify',name:'Spotify',kind:'spotify',version:'1.0.0',description:'Wiedergabe und Player auf dem Startbildschirm',author:'CleanFrame',license:'MIT'},
-    {id:'apple-remote',name:'iPhone Remote',kind:'native',version:'0.1.0',description:'Experimentelle iPhone-Fernbedienung · Simulationspaket',author:'CleanFrame',license:'MIT',packageName:'com.cleanframe.addon.appleremote',serviceInterface:1,permissions:['Local network','Foreground service']}
+    {id:'spotify',name:'Spotify',kind:'spotify',version:'1.0.0',description:'Wiedergabe und Player auf dem Startbildschirm',author:'CleanTV',license:'MIT'},
+    {id:'apple-remote',name:'iPhone Remote',kind:'native',version:'0.1.0',description:'Experimentelle iPhone-Fernbedienung · Simulationspaket',author:'CleanTV',license:'MIT',packageName:'com.cleanframe.addon.appleremote',serviceInterface:1,permissions:['Local network','Foreground service']}
   ];
   let model=copy(boot.addonLab||{installed:(boot.tvSource?.addons||[catalog[0]]).map(p=>({id:p.id,version:p.version,enabled:p.enabled!==false})),scenario:'connected',selected:'apple-remote'});
   let setupPin=null;

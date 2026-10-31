@@ -137,10 +137,10 @@ final class PhilipsRemote implements AutoCloseable {
                 vault.write(pinned); // Fail closed before initiating pairing if identity cannot be saved.
                 secrets = pinned; pin = discovered;
             }
-            String appName = automatic ? capture.arm(clock.getAsLong()) : "CleanFrame iPhone Remote";
+            String appName = automatic ? capture.arm(clock.getAsLong()) : "CleanTV iPhone Remote";
             long requestedAt = clock.getAsLong();
             JSONObject device = new JSONObject()
-                .put("device_name", "CleanFrame iPhone Remote")
+                .put("device_name", "CleanTV iPhone Remote")
                 .put("device_os", "Android").put("type", "native")
                 .put("id", randomId()).put("app_id", "com.cleanframe.addon.appleremote")
                 .put("app_name", appName);

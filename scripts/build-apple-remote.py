@@ -169,7 +169,7 @@ def build(args: argparse.Namespace) -> Path:
                         raise RuntimeError('Die APK enthält unerwartete native Bibliotheken.')
                 if any(digest(frozen / name) != sha for name, sha in inputs.items()):
                     raise RuntimeError('Ein gesicherter Quellstand wurde während des Builds verändert.')
-                result = output / f'CleanFrame-Apple-Remote-{identity.group(3)}-experimental.apk'
+                result = output / f'CleanTV-Apple-Remote-{identity.group(3)}-experimental.apk'
                 shutil.copy2(apk, result)
                 shutil.copy2(native, output / LIBRARY)
                 for directory in ('reports', 'test-results'):

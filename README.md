@@ -1,104 +1,85 @@
-> Personal Android TV and Mac editor continuation: private source is maintained at AntoinS/CleanFrame. See [versions and releases](docs/releases.md), [Android setup](android/README.md), [editor](docs/editor.md) and [add-ons](docs/addons.md). Original upstream documentation and MIT attribution follow below.
+# CleanTV
 
-# CleanFrame
+**Eine anpassbare Startoberfläche für Android TV – mit visuellem Mac-Editor und Add-ons.**
 
-A quieter home screen for Samsung The Frame. Your apps, a photograph and the time, with an interface made for the TV remote.
+CleanTV ist eine **Weiterentwicklung von [CleanFrame von nthnclrk](https://github.com/nthnclrk/CleanFrame)**. Das Original entstand für Samsung The Frame mit Tizen. Diese Weiterentwicklung ergänzt einen Android-TV-Host, einen lokalen Editor und unabhängig aktualisierbare Erweiterungen. Git-Historie, MIT-Lizenz und ursprüngliche Urheber bleiben erhalten; dieses Repository wird bei GitHub als eigenständiges Repository geführt.
 
-![CleanFrame browser preview using the bundled Manrope font](docs/images/cleanframe-dock.jpg)
+CleanTV ist eine App und optionale Home-Oberfläche, **keine Ersatz-Firmware**. Android, installierte Apps und die Gerätefunktionen bleiben bestehen.
 
-I built CleanFrame for one TV: my own Samsung The Frame, running Tizen. I'm sharing the code and setup notes as a starting point for other people to build on.
+[Releases](https://github.com/AntoinS/CleanTV/releases) · [Add-ons](https://github.com/AntoinS/cleanframe-addons) · [Android-Einrichtung](android/README.md) · [Editor](docs/editor.md)
 
-**Use it at your own risk.** Most of the work has gone into making it work well on my TV. Very little has gone into making it portable. The setup scripts reflect my computer, TV and firmware, so expect to adapt them and test the result on your own hardware.
+## Was CleanTV kann
 
-I highly recommend forking it and building on top of it, ideally with a coding agent that can help you understand and adapt the setup. Start with the browser preview, make the interface your own, then work through TV installation when you're ready. Native Home/startup changes need particular care; the setup guide covers the risks and recovery steps.
+| Bereich | Funktionen |
+| --- | --- |
+| Startbildschirm | Listen- und Dock-Layout, App-Reihenfolge, Symbole und Beschriftungen, All apps |
+| Darstellung | Foto-, helle und dunkle Hintergründe, Schrift, Fokusdarstellung, Rundungen und Transparenz |
+| Alltag | Uhrzeit und optionales Datum, Deutsch und Englisch, gruppierte Einstellungen |
+| Spotify | Kompakter und aufgeklappter Player, Cover, Fortschritt, Wiedergabesteuerung, QR-Anmeldung und Abmelden |
+| iPhone Remote | Experimentelle Steuerung über die Apple-TV-Fernbedienung im Kontrollzentrum, einschließlich unterstützter Texteingabe |
+| Add-ons | Installiert/Entdecken, Paketdetails, Einrichtung, Aktivierung und Android-bestätigte Installation/Deinstallation |
+| Mac-Editor | Bearbeiten der tatsächlichen Oberfläche, Vorschau, lokale Zwischenstände und vorbereitete TV-Versionen |
 
-## Try the interface
+Neu gegenüber dem ursprünglichen Projekt sind insbesondere der Android-Host, der Mac-Editor, Spotify Connect über die Spotify Web API, die iPhone-Erweiterung und die Paketverwaltung. Die ursprüngliche Tizen-Implementierung und ihre Dokumentation bleiben als Grundlage erhalten.
 
-You need Node.js 22.13+ (22 LTS), or 24+, and Python 3.10+ to run the browser preview.
+## Oberfläche ausprobieren
+
+Voraussetzungen: Node.js 22.13+ aus der 22-LTS-Reihe oder Node.js 24+, Python 3.10+.
 
 ```sh
-git clone https://github.com/nthnclrk/CleanFrame.git
-cd CleanFrame
+git clone https://github.com/AntoinS/CleanTV.git
+cd CleanTV
 npm ci
 npm run dev:public
 ```
 
-Open [localhost:4795/home/](http://localhost:4795/home/). Use the arrow keys, Enter and Escape, or click the controls. App launches and Samsung screens require a TV; the preview reports that limitation when you select them.
+Öffne [localhost:4795/home/](http://localhost:4795/home/). Pfeiltasten, Enter und Escape bedienen die Vorschau. Gerätefunktionen werden dort nicht als echte TV-Aktionen ausgeführt. Enthalten sind die öffentlichen Schriftarten Manrope, Geist und Newsreader.
 
-The public preview uses the included Manrope, Geist and Newsreader fonts.
+## Am Mac gestalten
 
-## What you can change
+Starte **CleanTV Editor.command** per Doppelklick oder `npm run editor`. Der bisherige Starthelfer `CleanFrame Editor.command` bleibt kompatibel.
 
-- Choose a List or Dock layout, with icons, names or both.
-- Use a photograph, light or dark background, with a simple 12-hour clock.
-- Adjust typography, focus and glass materials through the same Settings interface.
-- Choose and reorder Home apps; discover installed apps on the TV.
-- Select from fifteen wallpapers and save your preferences locally.
+- Elemente auswählen, verschieben und vergrößern; Position, Schrift, Farben, Abstände und Materialeigenschaften bearbeiten.
+- Hilfslinien, Raster, Einrasten sowie Abstandsmessung und Padding/Margin verwenden.
+- Bearbeiten und Ausprobieren trennen; Fernbedienungsnavigation direkt in der Vorschau testen.
+- Rückgängig/Wiederholen, benannte Zwischenstände und automatisches lokales Speichern nutzen.
+- Den aktuellen TV-Stand importieren, Verbindungsstatus lesen und zwischen Entwurf und Liveansicht wechseln.
+- Add-ons simulieren und lesende TV-Diagnose öffnen. Eine lokal eingerichtete Codex-Anbindung unterstützt Änderungen im Chat.
+- Einen festen Stand aus Quellcode, Design und geänderten Einstellungen für eine geprüfte APK vorbereiten. Es erfolgt keine automatische Übertragung auf den TV.
 
-The glass and blur are rendered ahead of time. The TV loads the finished images and uses transforms and opacity for focus feedback.
+Vorschauen unterstützen 720p, 1080p und 4K. **4K-Vorschau bedeutet nicht automatisch 4K-Ausgabe auf dem Fernseher.** Der geprüfte Philips liefert eine 1080p-Systemoberfläche auf einem 4K-Panel. Fotos erhalten durch Hochskalierung keine zusätzlichen Details. Die Liveansicht hängt von TV-Aufnahme und Netzwerk ab; konstante 30 oder 60 fps sind nicht zugesichert.
 
-## Use a coding agent
+## Auf Android TV verwenden
 
-Open this repo in a local coding agent and give it a bounded change:
+Die bisherige Geräteprüfung erfolgte auf einem Philips 58PUS7304/12 mit Android 12 und 32-Bit-ARM. Andere Geräte sind nicht pauschal freigegeben. Der Android-Host benötigt mindestens API 31; der native Remote-Build ist derzeit für armeabi-v7a vorgesehen.
 
-```text
-Read AGENTS.md, docs/development.md and docs/interaction-behaviour.md.
-Help me adapt CleanFrame. Start with the public-font browser preview.
-My first change is: <describe one change>.
-Preserve remote navigation, saved preferences and the ES5 runtime.
-Run the source checks and relevant browser checks. Show the result.
-This task is browser-only: do not connect to a TV, sign or install a
-package, or change Home/startup settings.
-```
+Beginne mit der [Android-Anleitung](android/README.md). App-Installation und Einrichtung als Standard-Home sind getrennte Schritte. Sichere vorher APK, Einstellungen und die ursprüngliche Home-Konfiguration. Behalte für eigene Builds denselben Signierschlüssel, wenn spätere Updates vorhandene Daten übernehmen sollen.
 
-See [working with an agent](docs/for-agents.md) for the TV setup prompt and the distinction between UI work, app installation and native Home changes. An agent needs local computer access for TV work; a hosted chat cannot reach your TV merely by reading this repo.
+Die Samsung-Anleitung beschreibt ausschließlich den ursprünglichen Tizen-Weg und ist keine Android-Installationsanleitung.
 
-## Put it on a TV
+## Add-ons und Updates
 
-Use the staged [Samsung The Frame setup guide](docs/agent-tv-setup-guide.md) to understand the process used on my TV and adapt it to yours. It covers the remote's Developer Mode sequence, official Samsung tools, your own certificates and app identity, installation, visible checks and recovery.
+Erweiterungen werden im separaten öffentlichen [CleanTV Add-on-Repository](https://github.com/AntoinS/cleanframe-addons) gepflegt. Die Adresse bleibt aus Kompatibilitätsgründen `cleanframe-addons`.
 
-Signing supports an ignored `.local/signing.json` based on `signing.example.json`: select your SDK, existing certificate profile and your own SDK-generated app identity. See [local signing setup](docs/development.md#local-tv-tools-and-signing). The TV installation commands and native Home helper still contain reference-machine assumptions. Your agent must check the installed-app IDs and each device stage with you. Installing the app and assigning the remote Home button are separate steps.
+CleanTV 0.8.3 ergänzt blaue Update-Markierungen, getrennte installierte/verfügbare Versionsangaben und **Alle aktualisieren**. Updates werden nacheinander verarbeitet; Android bestätigt jedes APK-Update. Ein Abbruch oder Fehler stoppt die restliche Reihe. Ein neuer Katalogeintrag ändert weder den Aktivierungsstatus noch die Deinstallierbarkeit der installierten Version. Einstellungen und Kopplungen bleiben bei Updates erhalten; eine vollständige Deinstallation entfernt dagegen die Daten der jeweiligen nativen App.
 
-| Area | Evidence and limits |
-| --- | --- |
-| Reference hardware | Samsung QA55LS03DAWXXY / LS03D, firmware 2130.0, Tizen 9.0, 32-bit ARM |
-| App installation | Signed installation and launch commands succeeded through 0.6.1. Latest rendering and remote feel still need physical observation. |
-| App launch and Home | Netflix/YouTube launch and physical Home from Netflix were confirmed on the reference setup. |
-| Still open | Normal power-on after streaming/Art Mode, corrected Smart Hub escape and native Art Mode destinations need definite physical checks. |
-| Other TVs | No compatibility claim. This is Tizen source; Android TV, Google TV, LG webOS and Roku need their own implementations. |
+Spotify-Anmeldung und Web-API-Einrichtung werden in den Add-on-Einstellungen verwaltet. Für geräteübergreifende Steuerung gelten die Voraussetzungen der Spotify API und des verwendeten Kontos.
 
-The detailed [device record](docs/tv-status.md) separates observed results from SDK responses. Native Home/startup uses undocumented, guarded helpers; it is optional and can fail after firmware changes. Keep a recovery baseline before attempting that work. The app can be opened manually without it.
+**iPhone Remote bleibt experimentell.** Kopplung, erneute Verbindung, Navigation, Lautstärke, Play/Pause sowie Spotify-Texteingabe einschließlich Umlauten, Emoji, Löschen und Suchen wurden am Referenzgerät bestätigt. Vollständige Standby-/Neustarttests, Netflix und weitere appübergreifende Eingabefälle sind noch offen. Siri, Mikrofonübertragung und AirPlay-Streaming gehören nicht dazu. Details stehen im [Remote-README](https://github.com/AntoinS/cleanframe-addons/blob/main/addons/apple-remote/README.md).
 
-## Develop and check
+## Entwickeln und beitragen
+
+Siehe [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md), [Entwicklung](docs/development.md), [Add-on-API](docs/addons.md) und [Versionen und Releases](docs/releases.md). Die TV-Oberfläche bleibt ES5-kompatibel. Änderungen müssen Fernbedienungsfokus, gespeicherte Einstellungen und bestehende Paketidentitäten erhalten.
 
 ```sh
 npm run check
 npm run check:tools
-npx playwright install chromium
 CLEANFRAME_PUBLIC_FONTS=1 npm run check:browser
 npm run check:public
-npm run export:public
 ```
 
-The browser checks use isolated Chromium profiles and a loopback preview. They never contact a TV. The public export creates `dist/CleanFrame-public-unsigned.wgt`, with public fonts and notices. It needs your own identity and signing before installation. It does not certify asset redistribution rights or device compatibility.
+Android-Builds und Gerätetests sind zusätzliche Prüfungen. Private Schlüssel, Kontodaten, Gerätekonfiguration und Editor-Entwürfe gehören nicht ins Repository. Neue Releases erhalten unveränderliche Tags und Prüfsummen; vorherige Versionen bleiben als Rückweg verfügbar.
 
-| Location | Purpose |
-| --- | --- |
-| `app/` | Current packaged UI and runtime assets |
-| `scripts/` | Preview, validation, asset generation and reference TV tools |
-| [Development](docs/development.md) / [testing](docs/testing.md) | Runtime map, preferences, checks and device boundaries |
-| [Assets](docs/assets.md) / [third-party notices](THIRD_PARTY_NOTICES.md) | Rendering recipes, font separation and asset provenance |
-| [Asset sources](docs/asset-sources.md) | Photo credits and verification of the bundled third-party assets |
-| `.local/`, `dist/` | Ignored private setup, recovery data, generated files and packages |
+## Herkunft und Lizenz
 
-## Contribute
-
-Fork it, experiment and build something that suits your TV. If you find a useful fix or improve the setup instructions, contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before a larger change. Reports should include model, firmware and the observed result, with private identifiers removed.
-
-## Licence and credits
-
-CleanFrame's original code and documentation use the [MIT licence](LICENSE). Fonts, photographs and logos retain their own terms; read [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Paid Pangram binaries are excluded from Git and public exports. A local package may include them, so keep personal builds separate from public downloads.
-
-The [release review](docs/public-release.md) records the publication checks. Third-party assets retain the terms listed in their notices. CleanFrame is an independent project with no Samsung or streaming-service affiliation.
-
-[TV Detox](https://github.com/Ansub/tv-detox) is a useful example of making an agent-assisted TV project approachable. Its Android setup is a different implementation; the prompts and instructions here are written for CleanFrame and Tizen.
+Das ursprüngliche CleanFrame stammt von **nthnclrk / Nathan**. CleanTV führt dieses Projekt mit Android-, Editor- und Add-on-Erweiterungen fort. Originale Copyright-Hinweise bleiben in [LICENSE](LICENSE) erhalten. Verwendete Bibliotheken, Schriftarten und weitere Komponenten sind in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) und den jeweiligen Add-on-Hinweisen dokumentiert.

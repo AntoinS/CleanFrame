@@ -27,7 +27,7 @@ try {
  await mkdir(root+'.local/software/previews',{recursive:true});
  for(const language of ['de','en'])for(const resolution of [720,1080,2160]){
   await page.selectOption('#language',language);await page.selectOption('#resolution',String(resolution));await page.selectOption('#scene','appearance.software');await ready(page);
-  await win(()=>window.CleanFrameEditor.win().CleanFrameSoftwareMock.set({current:{name:'CleanFrame',version:'0.8.3',versionName:'0.8.3-android24',versionCode:24},updateAvailable:true,result:'',error:'',busy:false}));
+  await win(()=>window.CleanFrameEditor.win().CleanFrameSoftwareMock.set({current:{name:'CleanTV',version:'0.8.3',versionName:'0.8.3-android24',versionCode:24},updateAvailable:true,result:'',error:'',busy:false}));
   await page.locator('#preview').screenshot({path:root+`.local/software/previews/software-${language}-${resolution}.png`});
   const geometry=await win(()=>{const w=window.CleanFrameEditor.win(),el=w.document.getElementById('appearanceRows');return {width:el.clientWidth,scroll:el.scrollWidth,focus:el.querySelectorAll('.is-focus').length};});
   assert.ok(geometry.scroll<=geometry.width+2,JSON.stringify(geometry));assert.equal(geometry.focus,1);

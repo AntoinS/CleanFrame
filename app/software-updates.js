@@ -1,7 +1,7 @@
 /* Software status stays separate from user preferences and add-on configuration. */
 (function () {
   'use strict';
-  var state = { current: { name: 'CleanFrame', version: '—' }, busy: false, error: '', checkedAt: 0 }, lastCheck = 0;
+  var state = { current: { name: 'CleanTV', version: '—' }, busy: false, error: '', checkedAt: 0 }, lastCheck = 0;
   var de = {
     'Software update': 'Softwareupdate', 'Installed version': 'Installierte Version', 'Available version': 'Verfügbare Version',
     'Check for updates': 'Nach Updates suchen', 'Download and install': 'Herunterladen und installieren', 'Build': 'Build',

@@ -13,3 +13,40 @@ For each release:
 5. Publish only the approved add-on packages and their metadata in the public catalog repository. Packages use independent semantic versions and immutable paths; catalog revisions have their own tags/releases. Document the minimum host API. Unknown kinds/APIs fail closed.
 
 GitHub source archives contain code; they are not signed TV packages. CI cannot reproduce this owner's signing identity without additional explicit setup. No signing secrets are stored in Actions.
+
+## Softwareupdates direkt am TV (ab 0.9.0)
+
+Die Versionsanzeige unten rechts in den Einstellungen öffnet die Software-Paketseite.
+Sie zeigt die tatsächlich installierte Android-Paketversion und den verfügbaren Stand.
+Ein blauer Punkt kennzeichnet ein Update. Download und Installation erfolgen nur auf
+Anforderung; Android bestätigt die Installation. Das ist ein Update der CleanTV-App,
+kein Android-Firmwareupdate. App-Daten, Anmeldungen, Add-on-Konfiguration und die
+bestehende Home-Zuordnung werden nicht zurückgesetzt.
+
+Der feste öffentliche Kanal ist `updates/stable.json` in diesem Repository. Er verweist
+auf eine unveränderliche APK unter `AntoinS/CleanTV/releases/download/`. CleanTV prüft
+SHA-256, eigene Paketkennung, eigenen Signierer, genaue Versionskennung und eine
+höhere Android-Buildnummer. Andere Signierer, ältere Builds und fremde Downloadorte
+werden abgelehnt. Selbst signierte Builds benötigen einen eigenen Releasekanal; ein
+anderes Zertifikat wird niemals durch ein offizielles Update ersetzt.
+
+Veröffentlichung:
+
+1. Paketversion und monotone `cleanframe.androidVersionCode` erhöhen. Den festen Stand
+   mit `scripts/editor_release.py` prüfen und mit dem vorhandenen Schlüssel bauen.
+2. Die verifizierte APK samt Prüfsumme an den passenden Release-Tag anhängen.
+3. Öffentliche Metadaten erzeugen, erst nach erfolgreichem APK-Upload veröffentlichen:
+
+   ```sh
+   python3 scripts/software-release.py PATH_TO_FROZEN_RELEASE \
+     --notes PATH_TO_PUBLIC_NOTES --output updates/stable.json
+   ```
+
+4. Die Metadaten zusätzlich dem Release beilegen. Vor stabiler Freigabe Download,
+   Abbruch und Aktualisierung auf dem Referenzgerät prüfen. APK, Daten einschließlich
+   `no_backup` sowie Berechtigungen vorher lokal sichern.
+
+Download- oder Installationsfehler behalten die vorhandene Version. Abbruch löst die
+Paketoperation, sodass erneut geprüft oder installiert werden kann. Host- und Add-on-
+Installationen laufen nicht gleichzeitig. Nach einem erfolgreichen Selbstupdate kann
+Android die bisherige Activity schließen; Home öffnet die neue Oberfläche.

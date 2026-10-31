@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0
+
+- Show the installed CleanTV version in the settings footer and open a software-update detail page.
+- Download verified same-package, same-signer APK updates from the public release channel, with Android confirmation and retained app data.
+- Display available versions and blue update indicators; handle cancellation and offline errors without stale installation state.
+- Preserve valid add-on state responses that contain a recoverable operation error.
+- Add software-update simulation and German/English 720p, 1080p and 4K editor checks.
+
+
 ## 0.8.4 — 2026-10-31
 
 - Rename the visible Android app and Mac editor to CleanTV while retaining package IDs, signing identities, preferences and pairing. Preserve the original CleanFrame entrypoint as an editor-launch compatibility wrapper.

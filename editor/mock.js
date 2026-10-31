@@ -25,7 +25,7 @@
   let link = {phase:"idle"};
   const ok=()=>'{"ok":true}';
   const version=boot.softwareVersion||'0.8.3',code=boot.softwareVersionCode||24;
-  let software={current:{name:'CleanFrame',version,versionName:version+'-android'+code,versionCode:code},available:null,checkedAt:0,busy:false,error:'',pending:{},simulated:true};
+  let software={current:{name:'CleanTV',version,versionName:version+'-android'+code,versionCode:code},available:null,checkedAt:0,busy:false,error:'',pending:{},simulated:true};
   const publishSoftware=()=>window.dispatchEvent(new CustomEvent('cleanframe:software',{detail:JSON.parse(JSON.stringify(software))}));
   function softwareRequest(input){
     const {action}=JSON.parse(input);

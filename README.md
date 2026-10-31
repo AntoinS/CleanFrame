@@ -63,6 +63,8 @@ Erweiterungen werden im separaten öffentlichen [CleanTV Add-on-Repository](http
 
 CleanTV 0.8.3 ergänzt blaue Update-Markierungen, getrennte installierte/verfügbare Versionsangaben und **Alle aktualisieren**. Updates werden nacheinander verarbeitet; Android bestätigt jedes APK-Update. Ein Abbruch oder Fehler stoppt die restliche Reihe. Ein neuer Katalogeintrag ändert weder den Aktivierungsstatus noch die Deinstallierbarkeit der installierten Version. Einstellungen und Kopplungen bleiben bei Updates erhalten; eine vollständige Deinstallation entfernt dagegen die Daten der jeweiligen nativen App.
 
+Ab **0.9.0** zeigt die Versionsanzeige unten rechts in den Einstellungen die installierte CleanTV-Version. Sie öffnet eine Softwareupdate-Seite mit blauem Update-Punkt, Versionsvergleich und Download. Android bestätigt das Update; Einstellungen und Anmeldungen bleiben erhalten.
+
 Spotify-Anmeldung und Web-API-Einrichtung werden in den Add-on-Einstellungen verwaltet. Für geräteübergreifende Steuerung gelten die Voraussetzungen der Spotify API und des verwendeten Kontos.
 
 **iPhone Remote bleibt experimentell.** Kopplung, erneute Verbindung, Navigation, Lautstärke, Play/Pause sowie Spotify-Texteingabe einschließlich Umlauten, Emoji, Löschen und Suchen wurden am Referenzgerät bestätigt. Vollständige Standby-/Neustarttests, Netflix und weitere appübergreifende Eingabefälle sind noch offen. Siri, Mikrofonübertragung und AirPlay-Streaming gehören nicht dazu. Details stehen im [Remote-README](https://github.com/AntoinS/cleanframe-addons/blob/main/addons/apple-remote/README.md).

@@ -1,5 +1,6 @@
 """Loopback-only visual editor. Draft writes are CAS, atomic and path allowlisted."""
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -62,6 +63,35 @@ class Store:
         raw=(self.path/'project.json').read_bytes()
         return json.loads(raw),hashlib.sha256(raw).hexdigest()
 
+    def import_tv(self, expected):
+        # Do not hold the draft lock during device I/O. Recheck before committing.
+        with self.lock:
+            if self.read()[1] != expected: raise DraftConflict('Der Entwurf wurde inzwischen geändert. Bitte aktuellen Stand laden.')
+        captured = self.tv.read_draft()
+        with self.lock:
+            project, etag = self.read()
+            if etag != expected: raise DraftConflict('Der Entwurf wurde während des TV-Abrufs geändert. Nichts überschrieben; bitte erneut versuchen.')
+            stamp = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+            updated = copy.deepcopy(project)
+            prefs = {key: captured['preferences'][key] for key in PREF_KEYS}
+            updated.update(design=captured['design'], preferences=prefs, basePrefs=copy.deepcopy(prefs),
+                           baseCapturedAt=stamp, guides=[], undo=[], redo=[],
+                           tvSource=dict(version=captured['version'], apps=captured['apps'], addons=captured['addons']))
+            updated.pop('addonLab', None)
+            updated['ui'].update(view='home', state='compact', mode='edit', selection='')
+            validate(updated)
+            ident=uuid.uuid4().hex
+            atomic(self.path/'snapshots'/f'{ident}.json', dict(id=ident, name='Vor TV-Import · '+stamp,
+                   created=stamp, project=project))
+            atomic(self.path/'project.json', updated)
+            local=json.loads((ROOT/'package.json').read_text())
+            expected_version=local['version']+'-android'+str(local['cleanframe']['androidVersionCode'])
+            return dict(etag=self.read()[1], version=captured['version'], snapshot=ident,
+                        sourceMatches=captured['version']==expected_version)
+
+
+class DraftConflict(ValueError): pass
+
 class Editor(Preview):
     def log_message(self,*args): pass
     def safe_host(self): return self.headers.get('Host') == '127.0.0.1:'+str(self.server.server_port)
@@ -81,7 +111,7 @@ class Editor(Preview):
             return self.file(ROOT/'editor/index.html','text/html; charset=utf-8')
         if route.startswith('/editor/'):
             name=route[len('/editor/'):]
-            allowed={'editor.js','editor.css','mock.js','qr-preview.js','workspace.js','geometry.js','native-video.js'}
+            allowed={'editor.js','editor.css','mock.js','qr-preview.js','workspace.js','geometry.js','native-video.js','addon-lab.js','addon-mock.js'}
             if name not in allowed:self.send_error(404);return
             return self.file(ROOT/'editor'/name)
         if route=='/media/spotify-1.png': return self.file(ROOT/'app/assets/wallpapers/cove-thumb.jpg','image/jpeg')
@@ -90,6 +120,7 @@ class Editor(Preview):
             project,etag=store.read();return self.json(dict(project=project,etag=etag,token=store.token,source=fingerprint()))
         if route=='/api/editor/watch':
             _,etag=store.read();return self.json(dict(etag=etag,source=fingerprint(),token=store.token))
+        if route=='/api/editor/addons/diagnostics':return self.json(store.tv.addon_diagnostics())
         if route=='/api/editor/tv/status':return self.json(store.tv.status())
         if route=='/api/editor/agent/state':return self.json(store.agent.state())
         if route=='/api/editor/tv/live/status':return self.json(store.live.status())
@@ -124,8 +155,8 @@ class Editor(Preview):
             path=store.path/'releases'/str(store.job)/'status.json'
             return self.json(json.loads(path.read_text()) if store.job and path.exists() else {'state':'idle'})
         if route=='/home/' and parse_qs(urlsplit(self.path).query).get('editor')==['1']:
-            project,_=store.read();boot=json.dumps({'preferences':project['preferences'],'scenario':project['ui'].get('scenario','playing')},ensure_ascii=False).replace('<','\\u003c')
-            raw=(ROOT/'app/index.html').read_text().replace('<script src="android-device.js">','<script>window.CleanFrameEditorBoot='+boot+';</script><script src="/editor/mock.js"></script><script src="android-device.js">').replace('</body>','<script src="/editor/qr-preview.js"></script></body>').encode()
+            project,_=store.read();boot=json.dumps({'preferences':project['preferences'],'scenario':project['ui'].get('scenario','playing'),'tvSource':project.get('tvSource'),'addonLab':project.get('addonLab')},ensure_ascii=False).replace('<','\\u003c')
+            raw=(ROOT/'app/index.html').read_text().replace('<script src="android-device.js">','<script>window.CleanFrameEditorBoot='+boot+';</script><script src="/editor/mock.js"></script><script src="/editor/addon-mock.js"></script><script src="android-device.js">').replace('</body>','<script src="/editor/qr-preview.js"></script></body>').encode()
             self.send_response(200);self.send_header('Content-Type','text/html; charset=utf-8');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
         if route.startswith('/api/') or not (route.startswith('/home/') or route.startswith('/build/') or route=='/'):
             self.send_error(404);return
@@ -139,6 +170,7 @@ class Editor(Preview):
             if size<2 or size>4_000_000:self.send_error(413);return
             value=json.loads(self.rfile.read(size));route=urlsplit(self.path).path
             if route=='/api/editor/tv/connect':return self.json(store.tv.connect())
+            if route=='/api/editor/tv/import':return self.json(store.import_tv(value.get('etag')))
             if route=='/api/editor/agent/send':return self.json(store.agent.submit(value.get('text'),value.get('context',{})))
             if route=='/api/editor/agent/stop':return self.json(store.agent.stop())
             with store.lock:
@@ -167,6 +199,7 @@ class Editor(Preview):
                     subprocess.Popen([sys.executable,str(ROOT/'scripts/editor_release.py'),str(release)],cwd=ROOT,stdin=subprocess.DEVNULL,stdout=log,stderr=subprocess.STDOUT,start_new_session=True);log.close()
                     return self.json({'id':ident})
                 self.send_error(404)
+        except DraftConflict as error:self.json({'error':str(error)},409)
         except (ValueError,KeyError,FileNotFoundError,json.JSONDecodeError) as error:self.json({'error':str(error)},400)
         except Exception as error:self.json({'error':'Der Vorgang ist fehlgeschlagen: '+str(error)},500)
 

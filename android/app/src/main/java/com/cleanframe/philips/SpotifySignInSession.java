@@ -1,19 +1,12 @@
 package com.cleanframe.philips;
 
-import android.app.Activity;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Base64;
-import android.view.Gravity;
-import android.view.View;
-import android.widget.Button;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
 import com.google.zxing.common.BitMatrix;
@@ -32,8 +25,8 @@ import java.util.Collections;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Phone approval, native PKCE exchange. Credentials never enter the QR or WebView. */
-public final class SpotifySignInActivity extends Activity {
+/** Native PKCE session. Only QR pixels, a display code and fixed status reach the UI. */
+final class SpotifySignInSession implements AutoCloseable {
     private static final String ORIGIN = "https://cleanframe-spotify-link.earthydune259.chatgpt.site";
     private static final String REDIRECT = ORIGIN + "/spotify/callback";
     private static final String CLIENT_ID = "656602ccdccc4cb8b5b91ced7ed042e2";
@@ -44,34 +37,21 @@ public final class SpotifySignInActivity extends Activity {
     private volatile boolean closed;
     private String verifier, state, pollSecret, pairing;
     private long deadline;
-    private ImageView qr;
-    private TextView title, detail, pairingLabel;
-    private Button back;
-    private android.content.Context localized;
-
-    @Override public void onCreate(Bundle saved) {
-        super.onCreate(saved);
-        android.content.res.Configuration configuration = new android.content.res.Configuration(getResources().getConfiguration());
-        configuration.setLocale(java.util.Locale.forLanguageTag("de".equals(getIntent().getStringExtra("language")) ? "de" : "en"));
-        localized = createConfigurationContext(configuration);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-        LinearLayout root = new LinearLayout(this);
-        root.setGravity(Gravity.CENTER); root.setPadding(dp(48), dp(32), dp(48), dp(32)); root.setBackgroundColor(Color.rgb(24,24,24));
-        qr = new ImageView(this); qr.setContentDescription(localized.getString(R.string.spotify_qr_description)); qr.setBackgroundColor(Color.rgb(39,39,39));
-        root.addView(qr, new LinearLayout.LayoutParams(dp(256), dp(256)));
-        LinearLayout copy = new LinearLayout(this); copy.setOrientation(LinearLayout.VERTICAL); copy.setPadding(dp(40),0,0,0);
-        root.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
-        title = text(30); title.setText(localized.getString(R.string.spotify_connect)); copy.addView(title);
-        detail = text(18); detail.setPadding(0,dp(16),0,dp(16)); detail.setText(localized.getString(R.string.spotify_preparing)); copy.addView(detail);
-        pairingLabel = text(20); copy.addView(pairingLabel);
-        back = new Button(this); back.setText(localized.getString(R.string.back)); back.setOnClickListener(v -> finish());
-        LinearLayout.LayoutParams button = new LinearLayout.LayoutParams(dp(200), dp(48)); button.topMargin = dp(24); copy.addView(back,button);
-        setContentView(root); back.requestFocus();
-        DesignOverrides.applyQr(root, qr, title, detail, pairingLabel, back);
-        worker.execute(this::begin);
+    private final Context context;
+    private final Runnable changed, connected;
+    private volatile String snapshot = "{\"phase\":\"preparing\"}";
+    SpotifySignInSession(Context context, Runnable changed, Runnable connected) {
+        this.context = context.getApplicationContext(); this.changed = changed; this.connected = connected;
     }
-    private TextView text(int size) { TextView value = new TextView(this); value.setTextColor(Color.rgb(244,244,241)); value.setTextSize(size); return value; }
-    private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+    void start() { worker.execute(this::begin); }
+    String state() { return snapshot; }
+    private void publish(String phase, String image, String code) {
+        if (closed) return;
+        try { snapshot = new JSONObject().put("phase", phase).put("qr", image).put("code", code)
+            .put("expiresAt", phase.equals("pending") ? System.currentTimeMillis() + Math.max(0, deadline - SystemClock.elapsedRealtime()) : 0).toString(); }
+        catch (Exception ignored) { return; }
+        main.post(() -> { if (!closed) changed.run(); });
+    }
     private String randomToken(int bytes) { byte[] data = new byte[bytes]; random.nextBytes(data); return Base64.encodeToString(data, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING); }
     private byte[] digest(String value) throws Exception { return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.US_ASCII)); }
 
@@ -88,22 +68,20 @@ public final class SpotifySignInActivity extends Activity {
             int[] pixels = new int[512*512];
             for (int y=0;y<512;y++) for (int x=0;x<512;x++) pixels[y*512+x] = matrix.get(x,y) ? Color.BLACK : Color.WHITE;
             Bitmap bitmap = Bitmap.createBitmap(pixels,512,512,Bitmap.Config.ARGB_8888);
-            main.post(() -> {
-                if (closed) return;
-                qr.setImageBitmap(bitmap); detail.setText(localized.getString(R.string.spotify_scan));
-                pairingLabel.setText(localized.getString(R.string.spotify_pairing_code, pairing.substring(0,6).toUpperCase(java.util.Locale.ROOT)));
-                schedule();
-            });
-        } catch (Exception failure) { fail(localized.getString(R.string.spotify_unreachable)); }
+            ByteArrayOutputStream png = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, png); bitmap.recycle();
+            publish("pending", "data:image/png;base64," + Base64.encodeToString(png.toByteArray(), Base64.NO_WRAP), pairing.substring(0,6).toUpperCase(java.util.Locale.ROOT));
+            main.post(this::schedule);
+        } catch (Exception failure) { fail("unreachable"); }
     }
     private void schedule() { if (!closed) main.postDelayed(() -> { if (!closed) worker.execute(this::poll); },2500); }
     private void poll() {
         try {
-            if (SystemClock.elapsedRealtime() >= deadline) { fail(localized.getString(R.string.spotify_expired)); return; }
+            if (SystemClock.elapsedRealtime() >= deadline) { fail("expired"); return; }
             JSONObject result = request(ORIGIN + "/api/pair/" + pairing, new JSONObject().put("secret",pollSecret).toString(),false);
             if ("pending".equals(result.optString("status"))) { main.post(this::schedule); return; }
             if (!"complete".equals(result.optString("status")) || !state.equals(result.optString("state")) || !REDIRECT.equals(result.optString("redirectUri"))) throw new IllegalStateException();
-            if (!result.isNull("error")) { fail(localized.getString(R.string.spotify_cancelled)); return; }
+            if (!result.isNull("error")) { fail("cancelled"); return; }
             String code = result.getString("code");
             if (code.isEmpty() || code.length() > 4096) throw new IllegalStateException();
             String form = "grant_type=authorization_code&client_id=" + encode(CLIENT_ID) + "&redirect_uri=" + encode(REDIRECT)
@@ -111,16 +89,15 @@ public final class SpotifySignInActivity extends Activity {
             JSONObject tokens = request("https://accounts.spotify.com/api/token", form, true);
             if (!"Bearer".equalsIgnoreCase(tokens.optString("token_type"))) throw new IllegalStateException();
             JSONObject saved = new JSONObject().put("client_id",CLIENT_ID).put("refresh_token",tokens.getString("refresh_token"));
-            if (closed) return;
-            new SpotifyCredentials(this).save(saved);
-            main.post(() -> {
+            synchronized (this) {
                 if (closed) return;
-                qr.setVisibility(View.INVISIBLE); title.setText(localized.getString(R.string.spotify_connected)); detail.setText(localized.getString(R.string.spotify_returning)); pairingLabel.setText("");
-                main.postDelayed(this::finish,1500);
-            });
-        } catch (Exception failure) { fail(localized.getString(R.string.spotify_failed)); }
+                new SpotifyCredentials(context).save(saved);
+            }
+            publish("connected", "", "");
+            main.post(() -> { if (!closed) connected.run(); });
+        } catch (Exception failure) { fail("failed"); }
     }
-    private void fail(String message) { main.post(() -> { if (!closed) { qr.setVisibility(View.INVISIBLE); pairingLabel.setText(""); detail.setText(message); } }); }
+    private void fail(String phase) { publish(phase, "", ""); }
     private static String encode(String value) throws Exception { return URLEncoder.encode(value,"UTF-8"); }
     private JSONObject request(String endpoint, String body, boolean form) throws Exception {
         if (closed) throw new IllegalStateException();
@@ -139,10 +116,10 @@ public final class SpotifySignInActivity extends Activity {
             }
         } finally { connection.disconnect(); if (inFlight==connection) inFlight=null; }
     }
-    @Override public void onStop() {
-        closed=true; main.removeCallbacksAndMessages(null);
-        HttpURLConnection request=inFlight; if(request!=null)request.disconnect(); worker.shutdownNow();
-        verifier=null; pollSecret=null; state=null;
-        super.onStop(); finish();
+    @Override public synchronized void close() {
+        closed = true; main.removeCallbacksAndMessages(null);
+        HttpURLConnection request = inFlight; if (request != null) request.disconnect();
+        worker.shutdownNow(); verifier = null; pollSecret = null; state = null;
+        snapshot = "{\"phase\":\"idle\"}";
     }
 }

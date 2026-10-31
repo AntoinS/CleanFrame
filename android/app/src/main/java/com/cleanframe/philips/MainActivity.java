@@ -58,6 +58,7 @@ public final class MainActivity extends Activity {
     private WebView webView;
     private BroadcastReceiver unlockReceiver;
     private SpotifyMedia spotify;
+    private volatile SpotifySignInSession spotifySignIn;
     private AddonManager addons;
     private boolean resumed;
 
@@ -285,7 +286,18 @@ public final class MainActivity extends Activity {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
     }
 
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent); setIntent(intent);
+        if (webView != null) webView.evaluateJavascript("window.dispatchEvent(new Event('cleanframe:open-addon'));", null);
+    }
+
     public final class NativeBridge {
+        @JavascriptInterface public String requestedAddon() {
+            String id = getIntent().getStringExtra("cleanframeAddon");
+            getIntent().removeExtra("cleanframeAddon");
+            return "apple-remote".equals(id) ? id : "";
+        }
+
         @JavascriptInterface
         public String addons(String request) { return addons.request(request); }
 
@@ -313,9 +325,27 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public String spotifySignIn(String language) {
-            return performAction(() -> startNativeActivity(new Intent(MainActivity.this, SpotifySignInActivity.class)
-                    .putExtra("language", "de".equals(language) ? "de" : "en")));
+        public String spotifyLink(String operation) {
+            if ("state".equals(operation)) return spotifySignIn == null ? "{\"phase\":\"idle\"}" : spotifySignIn.state();
+            if (!"begin".equals(operation) && !"cancel".equals(operation)) return error("Unknown sign-in operation.");
+            runOnUiThread(() -> {
+                if (spotifySignIn != null) { spotifySignIn.close(); spotifySignIn = null; }
+                if ("begin".equals(operation) && resumed) {
+                    spotifySignIn = new SpotifySignInSession(MainActivity.this, () -> {
+                        if (webView != null) webView.evaluateJavascript("window.dispatchEvent(new Event('cleanframe:spotify-link'));", null);
+                    }, () -> { if (spotify != null) spotify.resume(resumed); });
+                    spotifySignIn.start();
+                }
+            });
+            return "{\"ok\":true}";
+        }
+
+        @JavascriptInterface
+        public String remotePermission(String operation) {
+            if ("pairing".equals(operation)) return performAction(() -> startNativeActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+            if ("enable".equals(operation)) return performAction(() -> startNativeActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)));
+            if ("select".equals(operation)) return performAction(() -> getSystemService(android.view.inputmethod.InputMethodManager.class).showInputMethodPicker());
+            return error("Unknown add-on permission action.");
         }
 
         @JavascriptInterface
@@ -431,6 +461,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onPause() {
         resumed = false;
+        if (spotifySignIn != null) { spotifySignIn.close(); spotifySignIn = null; }
         if (spotify != null) spotify.resume(false);
         if (webView != null) {
             // Native visibility drives document.hidden and the existing rotation code.
@@ -444,6 +475,7 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         resumed = true;
+        if (addons != null) addons.resume();
         if (spotify != null) spotify.resume(true);
         if (webView != null) {
             webView.onResume();

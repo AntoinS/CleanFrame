@@ -40,6 +40,76 @@ class Television:
         self.cached = None
         return self.status()
 
+    def read_draft(self):
+        """Capture the running UI without launching it or reading account storage."""
+        from editor_server import ROOT
+        config = self.config()
+        if not config:
+            raise ValueError('TV-Verbindung ist auf diesem Mac noch nicht eingerichtet.')
+        pid = self.adb(['shell', 'pidof', config['package']]).strip().split()
+        if not pid or not pid[0].isdigit():
+            raise ValueError('Bitte CleanFrame über die Home-Taste am Fernseher öffnen und erneut versuchen.')
+        package = self.adb(['shell', 'dumpsys', 'package', config['package']])
+        version = re.search(r'versionName=(\S+)', package)
+        if not version:
+            raise ValueError('Die installierte CleanFrame-Version konnte nicht gelesen werden.')
+        port = self.adb(['forward', 'tcp:0', 'localabstract:webview_devtools_remote_' + pid[0]]).strip()
+        if not port.isdigit():
+            raise ValueError('Der Lesekanal zum Fernseher konnte nicht geöffnet werden.')
+        try:
+            result = subprocess.run(['node', str(ROOT / 'scripts/editor-tv-read.mjs'), port],
+                                    capture_output=True, timeout=25, cwd=ROOT)
+            if result.returncode:
+                raise ValueError('Der TV-Stand konnte nicht gelesen werden. Bitte CleanFrame am TV öffnen und erneut versuchen.')
+            snapshot = json.loads(result.stdout)
+            snapshot['version'] = version.group(1)
+            return snapshot
+        finally:
+            self.adb(['forward', '--remove', 'tcp:' + port])
+
+    def addon_diagnostics(self):
+        """Fixed read-only query; never start/bind an add-on to obtain diagnostics."""
+        package = 'com.cleanframe.addon.appleremote'
+        result = dict(package=package, checkedAt=time.time(), installed=False, status=None)
+        try:
+            info = self.adb(['shell', 'dumpsys', 'package', package])
+            version = re.search(r'versionName=(\S+)', info)
+            if not version:
+                result['message'] = 'Das experimentelle Fernbedienungs-Add-on ist nicht installiert.'
+                return result
+            result.update(installed=True, version=version.group(1))
+            dump = self.adb(['shell', 'dumpsys', 'activity', 'service', package + '/.RemoteService'])
+            if len(dump) > 100000:
+                raise ValueError('Diagnoseausgabe überschreitet die erlaubte Größe.')
+            # Service.dump produces exactly one bounded redacted JSON line.
+            for line in dump.splitlines():
+                if not line.strip().startswith('{'):
+                    continue
+                value = json.loads(line)
+                if value.get('package') != package or value.get('api') != 1:
+                    continue
+                allowed = ['api', 'package', 'version', 'enabled', 'running']
+                safe = {key: value[key] for key in allowed if key in value}
+                if isinstance(value.get('automaticPairingAccess'), bool): safe['automaticPairingAccess'] = value['automaticPairingAccess']
+                if type(value.get('automaticPairings')) is int and 0 <= value['automaticPairings'] <= 100000: safe['automaticPairings'] = value['automaticPairings']
+                if value.get('backend') in ['philips', 'google']:
+                    safe['backend'] = value['backend']
+                for section in ['android', 'apple', 'keyboard', 'philips']:
+                    safe[section] = {k: v for k, v in value.get(section, {}).items()
+                                     if k in ['state', 'ready', 'connected', 'hasError', 'pairedDevices', 'enabled', 'selected', 'paired', 'certificatePinned', 'reason']
+                                     and isinstance(v, (str, bool, int)) and len(str(v)) <= 100}
+                safe['events'] = [{k: v for k, v in event.items()
+                                  if k in ['seq', 'at', 'stage', 'action', 'result', 'type', 'length', 'id', 'time', 'kind']
+                                  and isinstance(v, (str, bool, int, float)) and len(str(v)) <= 100}
+                                 for event in value.get('events', [])[-200:] if isinstance(event, dict)]
+                result['status'] = safe
+                break
+            if result['status'] is None:
+                result['message'] = 'Dienst ist nicht gestartet. Die Diagnose startet ihn nicht automatisch.'
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            result['message'] = str(error)[:300]
+        return result
+
     def status(self):
         with self.lock:
             if self.cached and time.time() - self.cached['checkedAt'] < 10:

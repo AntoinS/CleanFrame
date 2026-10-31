@@ -58,7 +58,7 @@ def run(release):
         command(['python3','scripts/test-editor-tools.py'],env)
         command(['python3','scripts/test-editor-workspace.py'],env)
         command(['npm','run','check:browser'],env,360)
-        for script in ['check-android-browser.mjs','check-spotify-browser.mjs','check-options-browser.mjs','check-editor.mjs','check-editor-workspace.mjs']:
+        for script in ['check-android-browser.mjs','check-spotify-browser.mjs','check-options-browser.mjs','check-editor.mjs','check-editor-workspace.mjs','check-editor-import.mjs','check-addons-browser.mjs','check-editor-addons.mjs','check-addon-setup.mjs']:
             command(['node','scripts/'+script],env,360)
         custom=env.copy();custom.pop('CLEANFRAME_BASELINE_DESIGN',None)
         command(['node','scripts/capture-editor.mjs',str(release)],custom,240)
@@ -76,7 +76,7 @@ def run(release):
         out=release/('CleanFrame-'+version['name']+'.apk');shutil.copy2(apk,out)
         inputs=json.loads((release/'inputs.json').read_text())
         if any(digest(source/path)!=sha for path,sha in inputs.items()):raise RuntimeError('Gesicherte Quelldateien wurden während der Prüfung verändert.')
-        manifest={'version':version,'apk':out.name,'sha256':digest(out),'signerSha256':config['signerSha256'],'checks':checks,'sourceManifestSha256':digest(release/'inputs.json'),'designSha256':digest(source/'app/design.json'),'tvInstalled':False,'nativeQr':'Browser preview approximate; native screenshot and remote test required after TV transfer.'}
+        manifest={'version':version,'apk':out.name,'sha256':digest(out),'signerSha256':config['signerSha256'],'checks':checks,'sourceManifestSha256':digest(release/'inputs.json'),'designSha256':digest(source/'app/design.json'),'tvInstalled':False,'nativeQr':'Shared frontend with simulated QR state; real QR and native screenshots verified separately.'}
         write(release/'manifest.json',manifest)
         status(release,'ready','APK, Vorschauen und Änderungsliste sind fertig. Die Übertragung erfolgt anschließend gemeinsam im Chat.')
     except Exception as error:

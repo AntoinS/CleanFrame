@@ -750,7 +750,45 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .is-android .settings-overview.has-extras .settings-group{height:112px;padding:16px 24px;border-radius:16px;background:rgba(128,128,128,.08)}
 .is-android .settings-overview.has-extras .settings-group.is-focus{background:var(--solid)}
 .detail-display .setting-choice,.detail-homescreen .setting-choice{border-radius:16px;margin-bottom:8px}
-.detail-addons .appearance-rows{max-height:660px;overflow-y:auto;padding:8px}
+/* Package manager shares the settings frame and its keyboard focus model. */
+.is-addon-manager #scene{visibility:hidden}
+.detail-addons .appearance-rows,.detail-addon-detail .appearance-rows{top:244px;width:1640px;max-height:660px;overflow-y:auto;padding:8px}
+.detail-addons .appearance-desc,.detail-addon-detail .appearance-desc{width:960px}
+.detail-addons .settings-status,.detail-addon-detail .settings-status{left:1120px;top:960px;width:660px;font-size:24px;line-height:32px;text-align:right}
+.addon-manager .setting-section+.setting-section{margin-top:24px}
+.addon-manager .setting-options{align-items:stretch}
+.addon-manager .setting-choice{font-size:24px;line-height:32px;letter-spacing:0;border-radius:16px;transition:opacity 300ms cubic-bezier(.22,1,.36,1),transform 500ms cubic-bezier(.22,1,.36,1)}
+.addon-manager .setting-choice:active{transform:scale(.98)}
+.addon-manager .setting-choice.is-disabled{opacity:.5}
+.addon-manager .setting-choice+.setting-choice{margin-left:24px}
+.addon-tabs .setting-choice{flex:none;width:auto;min-height:64px;padding:16px 24px}
+.addon-tabs .setting-choice:last-child{margin-left:auto}
+.addon-tab.is-current{box-shadow:inset 0 0 0 2px var(--faint)}
+.addon-card-row .addon-card{flex:0 0 520px;min-width:0;min-height:240px;align-items:flex-start;padding:32px;background:rgba(127,127,127,.1)}
+.addon-card-row .addon-card.is-focus{background:var(--solid)}
+.addon-card .setting-copy{flex:1;padding-left:24px}
+.addon-card .setting-name{font-size:30px;line-height:36px;white-space:normal;overflow-wrap:break-word}
+.addon-card .setting-description{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:20px;line-height:28px;margin-top:8px}
+.addon-icon{display:flex;flex:none;align-items:center;justify-content:center;width:80px;height:80px;border-radius:16px;background:rgba(127,127,127,.12)}
+.addon-icon .ico{width:48px;height:48px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.addon-icon .mark{position:relative;display:block}
+.addon-status{display:block;margin-top:16px;font-size:18px;line-height:28px;color:var(--mute)}
+.addon-card.is-focus .addon-status{color:var(--solid-mute)}
+.addon-summary{display:flex;align-items:center;margin-bottom:32px;max-width:1240px}
+.addon-summary .addon-icon{width:96px;height:96px}
+.addon-summary-copy{display:block;margin-left:32px}
+.addon-summary .addon-status{margin:0 0 8px}
+.addon-description{display:block;font-size:30px;line-height:36px;text-wrap:pretty}
+.addon-manager .addon-action{flex:none;width:auto;min-height:64px;padding:16px 24px;background:rgba(127,127,127,.1)}
+.addon-manager .addon-action.is-focus{background:var(--solid)}
+.addon-metadata{display:flex;flex-wrap:wrap;margin-top:32px;padding:24px;background:rgba(127,127,127,.08);border-radius:16px}
+.addon-fact{flex:1;min-width:240px;padding:8px 16px}
+.addon-fact h3{font-size:18px;line-height:28px;font-weight:400;color:var(--mute)}
+.addon-fact p{margin-top:8px;font-size:24px;line-height:32px;overflow-wrap:break-word}
+.addon-empty{padding:64px 32px}
+.addon-empty h3{font-size:36px;line-height:40px;font-weight:500}
+.addon-empty p{margin-top:16px;font-size:24px;line-height:32px;color:var(--mute)}
+@media(prefers-reduced-motion:reduce){.addon-manager .setting-choice{transition:opacity 300ms cubic-bezier(.22,1,.36,1)}.addon-manager .setting-choice:active{transform:none}}
 #addonWidgets{position:absolute;left:1000px;top:260px;width:560px;pointer-events:none}
 .addon-widget{border-radius:16px;background:rgba(24,24,24,.6);color:#fff;padding:24px;margin-bottom:16px}
 .addon-widget h3{font-size:24px;line-height:32px;margin:0 0 8px}
@@ -759,6 +797,19 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .addon-widget{height:160px;padding:16px;overflow:hidden}
 .addon-widget h3{font-size:20px;line-height:28px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .addon-widget p{font-size:20px;line-height:28px;max-height:84px;overflow:hidden}
-.detail-addons .is-horizontal .setting-choice{padding:12px;height:72px;min-width:0}
-.detail-addons .is-horizontal .setting-name{font-size:24px;line-height:32px;white-space:normal}
-.detail-addons .is-horizontal .setting-forward{display:none}
+
+/* Add-on setup uses the same frontend and remote focus as package settings. */
+.detail-remote .appearance-rows,.detail-spotify-link .appearance-rows{width:880px;max-height:660px;overflow-y:auto;padding:8px}
+.detail-remote .settings-status,.detail-spotify-link .settings-status{left:1120px;top:244px;width:660px;font-size:24px;line-height:32px}
+.addon-setup-copy{width:860px;padding-right:40px}
+.addon-setup-copy .setting-options{display:flex;flex-wrap:wrap}
+.addon-setup-copy .setting-choice{width:auto;max-width:800px;margin:8px 16px 0 0;padding:16px 24px}
+.addon-setup-copy .setting-reason{margin:8px 0;max-width:800px}
+.addon-setup-status{position:relative;width:660px;padding:32px;border-radius:24px;background:#272727;color:#fff}
+.addon-setup-status h3{font-size:24px;line-height:32px;margin:0 0 16px}
+.addon-setup-status p,.addon-setup-status dt,.addon-setup-status dd{font-size:24px;line-height:32px;margin:0 0 16px}
+.addon-setup-status dl{margin:0 0 32px;overflow:hidden}
+.addon-setup-status dt{float:left;clear:left;width:45%;color:#bdbdbd}.addon-setup-status dd{margin-left:45%}
+.addon-pair-pin{font-size:72px;line-height:1;letter-spacing:8px;margin:24px 0}
+.addon-pair-qr{display:block;width:320px;height:320px;margin:24px auto;border-radius:8px}
+.addon-pair-placeholder{height:320px;display:flex;align-items:center;justify-content:center}.addon-pair-placeholder .ico{width:64px;height:64px}

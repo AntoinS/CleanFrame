@@ -1,0 +1,4 @@
+<resources>
+    <string name="pairing_access_name">CleanFrame · Automatic TV setup</string>
+    <string name="pairing_access_description">Reads only the Philips pairing code during setup started by CleanFrame (up to 30 seconds). No recording, input injection or reading other apps. You may disable this permission after setup.</string>
+</resources>

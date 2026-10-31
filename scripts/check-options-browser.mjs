@@ -11,13 +11,13 @@ const scene=name=>page.evaluate(name=>ShoreQA.scene(name),name);
 const act=action=>page.evaluate(action=>ShoreQA.activate(action),action);
 const ready=()=>page.waitForFunction(()=>ShoreQA.ready());
 const key=name=>page.keyboard.press(name);
-async function group(name){await scene('settings');const parent={background:'display',typography:'display',focus:'display',layout:'homescreen',clock:'homescreen',spotify:'addons'}[name];await act('settings.group.'+(parent||name));if(parent)await act('group.'+name);}
+async function group(name){await scene('settings');const parent={background:'display',typography:'display',focus:'display',layout:'homescreen',clock:'homescreen',spotify:'addons'}[name];await act('settings.group.'+(parent||name));if(name==='spotify')await act('addon.details.spotify');if(parent)await act('group.'+name);}
 const pass=message=>{checks.push(message);console.log(message);};
 try{
  await page.addInitScript(()=>{
   window.__calls=[];window.__media={permission:true,status:'playing',connection:'connected',webApi:'connected',webLinked:true,title:'Settings',artist:'Original artist',duration:180000,position:1000,speed:1,artColor:'#ebc789',artLight:true,actions:{previous:true,toggle:true,next:true}};
   window.__publish=patch=>{Object.assign(__media,patch);window.dispatchEvent(new CustomEvent('cleanframe:spotify',{detail:{...__media}}));};
-  window.CleanFrameNative={apps:()=>JSON.stringify([{appId:'com.google.android.youtube.tv',name:'YouTube'},{appId:'com.netflix.ninja',name:'Netflix'},{appId:'com.spotify.tv.android',name:'Spotify'}]),launchApp:id=>{__calls.push(['launch',id]);return '{"ok":true}';},home:()=>'{"ok":true}',settings:()=>'{"ok":true}',spotifyState:()=>JSON.stringify(__media),spotifyObserve:()=>'{"ok":true}',spotifyControl:command=>{__calls.push(['control',command]);return '{"ok":true}';},spotifyAccess:()=>'{"ok":true}',spotifySignIn:language=>{__calls.push(['signin',language]);return '{"ok":true}';},spotifySignOut:()=>{__calls.push(['signout']);setTimeout(()=>__publish({webApi:'unlinked',webLinked:false,actions:{previous:false,toggle:false,next:false}}),50);return '{"ok":true}';}};
+  window.CleanFrameNative={apps:()=>JSON.stringify([{appId:'com.google.android.youtube.tv',name:'YouTube'},{appId:'com.netflix.ninja',name:'Netflix'},{appId:'com.spotify.tv.android',name:'Spotify'}]),launchApp:id=>{__calls.push(['launch',id]);return '{"ok":true}';},home:()=>'{"ok":true}',settings:()=>'{"ok":true}',spotifyState:()=>JSON.stringify(__media),spotifyObserve:()=>'{"ok":true}',spotifyControl:command=>{__calls.push(['control',command]);return '{"ok":true}';},spotifyAccess:()=>'{"ok":true}',spotifyLink:op=>{if(op==='begin')__calls.push(['signin']);return JSON.stringify(op==='state'?{phase:'pending',expiresAt:Date.now()+600000}:{ok:true});},spotifySignOut:()=>{__calls.push(['signout']);setTimeout(()=>__publish({webApi:'unlinked',webLinked:false,actions:{previous:false,toggle:false,next:false}}),50);return '{"ok":true}';}};
   if(!localStorage.getItem('cleanframe.home.v1'))localStorage.setItem('cleanframe.home.v1',JSON.stringify({language:'en',layout:'dock',bg:'photo',wall:'summit',home:['youtube','netflix','spotify'],controls:'both',spotifySurface:'cover'}));
  });
  await page.goto(preview.baseURL+'/home/');await ready();
@@ -62,10 +62,10 @@ try{
  assert.equal(await page.evaluate(()=>__calls.filter(c=>c[0]==='signout').length),1);
  assert.equal((await state()).focusAction,'spotify.signin');
  assert.equal(await page.locator('[data-action="spotify.signout"]').getAttribute('aria-disabled'),'true');
- await act('spotify.signin');assert.deepEqual(await page.evaluate(()=>__calls.at(-1)),['signin','de']);
+ await act('spotify.signin');assert.deepEqual(await page.evaluate(()=>__calls.at(-1)),['signin']);
  assert.equal(await page.evaluate(()=>__calls.filter(c=>c[0]==='control'||c[0]==='launch').length),0);
  await page.evaluate(()=>__publish({webLinked:true,webApi:'connected',actions:{previous:true,toggle:true,next:true}}));
- pass('Sign out requires confirmation, cancels safely, handles the asynchronous disconnected state, and never launches Spotify or changes playback. QR receives the selected language.');
+ pass('Sign out requires confirmation, cancels safely, handles the asynchronous disconnected state, and never launches Spotify or changes playback. QR stays in the localized frontend.');
 
  for(const width of [1920,1280])for(const lang of ['de','en']){
   await page.setViewportSize({width,height:width*9/16});await page.waitForFunction(w=>Math.abs(document.getElementById('stage').getBoundingClientRect().width-w)<1,width);

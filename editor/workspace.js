@@ -75,6 +75,11 @@ export function initWorkspace(api){
  $('chatInput').onkeydown=event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();$('chatForm').requestSubmit();}};
  $('stopAgent').onclick=guarded(async()=>chatState(await api.request('agent/stop',{})));
  $('toggleChat').onclick=()=>openChat(!chat);$('chatTab').onclick=()=>openChat(true);$('propertiesTab').onclick=()=>openChat(false);
+ $('importTv').onclick=guarded(async()=>{
+  const result=await api.importTv();if(!result)return;
+  source(false);$('tvPanel').hidden=true;
+  api.notice('TV '+result.version+' als Entwurf übernommen. Spotify zeigt Beispieldaten. Vorheriger Entwurf unter „Gespeicherte Zwischenstände“.'+(result.sourceMatches?'':' Hinweis: Die Vorschau verwendet eine andere lokale CleanFrame-Version.'));
+ });
  $('draftTab').onclick=()=>source(false);$('liveTab').onclick=()=>source(true);
  $('tvStatus').onclick=()=>{$('tvPanel').hidden=!$('tvPanel').hidden;$('tvStatus').setAttribute('aria-expanded',!$('tvPanel').hidden);if(!$('tvPanel').hidden)status();};
  $('closeTv').onclick=()=>{$('tvPanel').hidden=true;$('tvStatus').setAttribute('aria-expanded','false');};

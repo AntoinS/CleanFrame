@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "experimental": true,
+  "integration": "Experimental host backend selected by native backend:host. Physical pairing, key and IME verification still required.",
+  "artifacts": [
+    {
+      "coordinate": "com.squareup.okhttp3:okhttp:4.12.0",
+      "jarSha256": "b1050081b14bb7a3a7e55a4d3ef01b5dcfabc453b4573a4fc019767191d5f4e0",
+      "repository": "https://repo.maven.apache.org/maven2/",
+      "license": "Apache-2.0",
+      "source": "https://github.com/square/okhttp/tree/parent-4.12.0"
+    },
+    {
+      "coordinate": "io.github.rburgst:okhttp-digest:3.1.1",
+      "jarSha256": "86c3e09d956cd0b7b785472adfc650e7e87d381cc06ba6f77e48501896f1515a",
+      "repository": "https://repo.maven.apache.org/maven2/",
+      "license": "Apache-2.0",
+      "source": "https://github.com/rburgst/okhttp-digest"
+    }
+  ],
+  "protocolReference": {
+    "project": "ha-philipsjs",
+    "version": "3.3.0",
+    "license": "MIT",
+    "source": "https://github.com/danielperna84/ha-philipsjs/blob/master/haphilipsjs/__init__.py",
+    "use": "Wire field names, published protocol HMAC constant and formula only. No Python implementation or TLS verification bypass copied. JCA Mac computes HMAC-SHA1; Java Base64 encodes the raw 20-byte result."
+  },
+  "packagedNotices": "android/app/src/main/assets/third-party-http.txt",
+  "hardwareProofBeforeIntegration": "Fixed-loopback authenticated key accepted on API6.4 from add-on UID; this new OkHttp backend still requires its own physical pairing/control verification."
+}

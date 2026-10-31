@@ -7,7 +7,7 @@ from itertools import islice
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 import unittest
 from unittest.mock import patch, Mock
-from editor_server import Store, Editor, atomic
+from editor_server import Store, Editor, atomic, DraftConflict
 
 
 class WorkspaceTests(unittest.TestCase):
@@ -70,6 +70,63 @@ class WorkspaceTests(unittest.TestCase):
         status = self.store.tv.status()
         self.assertFalse(status['connected'])
         self.assertFalse(status['ready'])
+
+    def tv_capture(self):
+        project, _ = self.store.read()
+        return dict(preferences={**project['preferences'], 'wall': 'mint', 'language': 'en'},
+                    design={'version': 1, 'rules': []}, version='0.7.0-android16',
+                    apps=[{'appId': 'com.spotify.tv.android', 'name': 'Spotify'}],
+                    addons=[dict(id='spotify', name='Spotify', kind='spotify', version='1.0.0', enabled=False)])
+
+    def test_import_saves_exact_old_draft_and_rebases_preferences(self):
+        before, etag = self.store.read()
+        capture = self.tv_capture()
+        capture['preferences']['spotifyToken'] = 'must-not-import'
+        with patch.object(self.store.tv, 'read_draft', return_value=capture):
+            result = self.store.import_tv(etag)
+        project, _ = self.store.read()
+        self.assertEqual(project['preferences']['wall'], 'mint')
+        self.assertEqual(project['preferences'], project['basePrefs'])
+        self.assertEqual(project['design'], capture['design'])
+        self.assertFalse(project['tvSource']['addons'][0]['enabled'])
+        self.assertNotIn('spotifyToken', project['preferences'])
+        backup = json.loads((self.store.path/'snapshots'/f"{result['snapshot']}.json").read_text())
+        self.assertEqual(backup['project'], before)
+        self.assertNotEqual(result['etag'], etag)
+
+    def test_import_rejects_stale_request_without_contacting_tv(self):
+        with patch.object(self.store.tv, 'read_draft') as capture:
+            with self.assertRaises(DraftConflict): self.store.import_tv('stale')
+            capture.assert_not_called()
+
+    def test_import_does_not_overwrite_edits_during_device_read(self):
+        before, etag = self.store.read()
+        def capture():
+            before['preferences']['language'] = 'en'
+            atomic(self.store.path/'project.json', before)
+            return self.tv_capture()
+        with patch.object(self.store.tv, 'read_draft', side_effect=capture):
+            with self.assertRaises(DraftConflict): self.store.import_tv(etag)
+        self.assertEqual(self.store.read()[0], before)
+        self.assertFalse((self.store.path/'snapshots').exists())
+
+    def test_failed_or_invalid_capture_preserves_draft(self):
+        before, etag = self.store.read()
+        with patch.object(self.store.tv, 'read_draft', side_effect=ValueError('TV offline')):
+            with self.assertRaises(ValueError): self.store.import_tv(etag)
+        invalid = self.tv_capture()
+        invalid['design']['rules'] = [dict(view='home', layout='dock', state='*', target='caption', style={'background':'url(https://example.com)'})]
+        with patch.object(self.store.tv, 'read_draft', return_value=invalid):
+            with self.assertRaises(ValueError): self.store.import_tv(etag)
+        self.assertEqual(self.store.read(), (before, etag))
+        self.assertFalse((self.store.path/'snapshots').exists())
+
+    def test_capture_always_removes_only_its_own_forward(self):
+        with patch.object(self.store.tv, 'config', return_value={'package':'test.package'}), \
+             patch.object(self.store.tv, 'adb', side_effect=['123', 'versionName=0.7.0-android16', '4567', '']) as adb, \
+             patch('editor_tv.subprocess.run', side_effect=ValueError('WebView unavailable')):
+            with self.assertRaises(ValueError): self.store.tv.read_draft()
+            self.assertEqual(adb.call_args.args[0], ['forward', '--remove', 'tcp:4567'])
 
     def test_native_screenshot_has_dimensions_and_cache(self):
         raw = b'\x89PNG\r\n\x1a\n' + b'\x00\x00\x00\rIHDR' + struct.pack('>II',1920,1080)
@@ -189,6 +246,41 @@ class WorkspaceTests(unittest.TestCase):
             worker=video.worker;viewer.close();worker.join(timeout=2)
             self.assertFalse(worker.is_alive())
             self.assertEqual(video.status()['viewers'],0)
+
+
+class AddonDiagnosticTests(unittest.TestCase):
+    def test_only_fixed_read_commands_and_redacted_fields(self):
+        from editor_tv import Television
+        tv = Television(None)
+        payload = dict(api=1, package='com.cleanframe.addon.appleremote', running=True,
+                       pin='1234', secrets='PRIVATE', apple=dict(state='connected', pin='1234', pairedDevices=1),
+                       backend='philips', philips=dict(state='connected', paired=True, certificatePinned=True, password='PRIVATE'),
+                       keyboard=dict(ready=True, selected=True, text='PRIVATE'), events=[dict(id=1, kind='command', action='home', text='PRIVATE')])
+        calls = []
+        def adb(args, **kwargs):
+            calls.append(args)
+            return 'versionName=0.1.0' if 'package' in args else '  ' + json.dumps(payload)
+        with patch.object(tv, 'adb', side_effect=adb):
+            result = tv.addon_diagnostics()
+        self.assertTrue(result['installed'])
+        self.assertTrue(result['status']['keyboard']['ready'])
+        self.assertTrue(result['status']['keyboard']['selected'])
+        self.assertEqual(result['status']['backend'], 'philips')
+        self.assertTrue(result['status']['philips']['paired'])
+        self.assertTrue(result['status']['philips']['certificatePinned'])
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertNotIn('1234', json.dumps(result))
+        self.assertEqual(calls, [
+            ['shell', 'dumpsys', 'package', 'com.cleanframe.addon.appleremote'],
+            ['shell', 'dumpsys', 'activity', 'service', 'com.cleanframe.addon.appleremote/.RemoteService']])
+
+    def test_stopped_service_is_not_started(self):
+        from editor_tv import Television
+        tv = Television(None)
+        with patch.object(tv, 'adb', side_effect=['versionName=0.1.0', 'No services match']) as adb:
+            result = tv.addon_diagnostics()
+        self.assertIsNone(result['status'])
+        self.assertEqual(adb.call_count, 2)
 
 
 if __name__ == '__main__':

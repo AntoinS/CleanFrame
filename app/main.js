@@ -3,6 +3,7 @@
   'use strict';
   var ANDROID = window.FrameDevice && window.FrameDevice.platform === 'android';
   var ADDONS = window.CleanFrameAddons;
+  var SETUP = window.CleanFrameAddonSetup;
   var SPOTIFY = !!(ANDROID && FrameDevice.capabilities.spotify);
   var spotifyState = { status: 'idle' }, spotifyAt = 0, spotifyTimer = 0, spotifyObserving = null;
   var spotifyCommands = ['previous', 'toggle', 'next'];
@@ -115,7 +116,7 @@
   function onHome(id) { return S.c.home.indexOf(id) >= 0; }
   function top() { return S.stack[S.stack.length - 1]; }
   function push(e) { S.stack.push(e); return e; }
-  function pop() { if (S.stack.length > 1) S.stack.pop(); }
+  function pop() { if (S.stack.length > 1) { if (top().group === 'spotify-link') SETUP.close(); S.stack.pop(); } }
   function px(n) { return n.toFixed(2) + 'px'; }
   function icon(name, cls, underlay) {
     return '<svg class="ico' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true">'
@@ -889,7 +890,7 @@
     if (id === 'editor') openEditor('settings');
     else openAppearance(id);
   }
-  var DETAIL_NAMES = { display: 'Display', homescreen: 'Home screen', addons: 'Add-ons', background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: DEVICE_LABEL, clock: 'Clock and date', spotify: 'Spotify', language: 'Language' };
+  var DETAIL_NAMES = { remote: 'iPhone Remote', 'spotify-link': 'Spotify', display: 'Display', homescreen: 'Home screen', addons: 'Add-ons', 'addon-detail': 'Add-ons', background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: DEVICE_LABEL, clock: 'Clock and date', spotify: 'Spotify', language: 'Language' };
   function choice(axis, value, disabled) {
     return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled,
       label: typeof value === 'boolean' ? value ? translate('On') : translate('Off') : axis === 'font' ? FONTS[value].name : axis === 'mode' ? MODES.filter(function (m) { return m.id === value; })[0].name : value === 'both' ? translate('Both') : VALUE_NAMES[value] };
@@ -898,6 +899,7 @@
     var flat = S.c.bg !== 'photo', inactive = !materialApplies();
     function options(axis, values, disabled) { return values.map(function (value) { return choice(axis, value, disabled); }); }
     function link(group, description) { return { action: 'group.' + group, label: translate(DETAIL_NAMES[group] || 'Apps on Home'), description: translate(description) }; }
+    if (t.group === 'remote' || t.group === 'spotify-link') return SETUP.sections(t.group, S.c.language);
     if (t.group === 'display') return [{ id: 'display', title: translate('Appearance'), items: [
       link('background', 'Wallpaper, colour and rotation'),
       link('typography', 'Font for apps and clock'),
@@ -908,21 +910,7 @@
       link('editor', 'Choose and arrange apps'),
       link('clock', 'Time and date')
     ] }];
-    if (t.group === 'addons') {
-      var addonState = ADDONS.state(), entries = Object.keys(addonState.installed), rows = [{ id: 'catalog', title: translate('Discover'), items: [{ action: 'addon.refresh', label: translate('Refresh catalog'), disabled: addonState.busy }], reason: addonState.busy ? translate('Working…') : addonState.error }];
-      entries.forEach(function (id) {
-        var item = addonState.installed[id];
-        rows.push({ id: 'addon-' + id, title: item.name + ' · ' + item.version, horizontal: true, items: [
-          { action: 'addon.toggle.' + id, label: translate(item.enabled === false ? 'Enable' : 'Disable'), disabled: addonState.busy },
-          { action: 'addon.remove.' + id, label: translate('Uninstall'), disabled: addonState.busy }
-        ].concat(id === 'spotify' ? [{ action: 'group.spotify', label: translate('Settings') }] : []) });
-      });
-      addonState.catalog.forEach(function (item) {
-        var current = addonState.installed[item.id];
-        if (!current || current.version !== item.version) rows.push({ id: 'download-' + item.id, title: item.name + ' · ' + item.version, items: [{ action: 'addon.install.' + item.id, label: translate(current ? 'Update' : 'Download'), description: item.description, disabled: addonState.busy }] });
-      });
-      return rows;
-    }
+    if (t.group === 'addons' || t.group === 'addon-detail') return addonSections(t);
     if (t.group === 'language') return [{ id: 'language', title: translate('Language'), horizontal: true, items: options('language', ['de', 'en']) }];
     if (t.group === 'clock') return [{ id: 'dateVisible', title: translate('Show date'), horizontal: true, items: options('dateVisible', [true, false]), reason: translate('Date below the clock, using the TV time zone.') }];
     if (t.group === 'spotify') return [
@@ -962,11 +950,72 @@
       { action: 'samsung.settings', label: translate('TV settings'), description: translate('Picture, sound and network settings') }
     ] }];
   }
+  function addonText(value) { return ADDONS.text(S.c.language, value); }
+  function addonItem(id, state) {
+    var found = {}, installed = state.installed[id];
+    state.catalog.some(function (item) { if (item.id !== id) return false; Object.keys(item).forEach(function (key) { found[key] = item[key]; }); return true; });
+    if (installed) Object.keys(installed).forEach(function (key) { found[key] = installed[key]; });
+    if (found.kind === 'native' && state.runtime && state.runtime[id]) found.runtime = state.runtime[id];
+    if (found.kind === 'native' && found.runtime && typeof found.runtime.enabled === 'boolean') found.enabled = found.runtime.enabled;
+    return found.id ? found : null;
+  }
+  function addonDescription(item) {
+    var text = item.description;
+    if (text && typeof text === 'object') text = text[S.c.language] || text.en;
+    return typeof text === 'string' ? text : item.id === 'spotify' ? addonText('Playback, account and widget appearance') : addonText(item.kind === 'native' ? 'Native service' : 'Home widget');
+  }
+  function addonStatus(item, state) {
+    var installed = state.installed[item.id], update = false;
+    state.catalog.some(function (entry) { if (entry.id === item.id && installed && (entry.version !== installed.version || entry.versionCode && entry.versionCode !== installed.versionCode)) update = true; return update; });
+    if (!installed) return addonText('Available');
+    if (update) return addonText('Update available');
+    if (item.enabled === false) return addonText('Disabled');
+    return addonText(item.kind === 'native' ? item.runtime && item.runtime.running && (item.runtime.philips || item.runtime.android) && ((item.runtime.philips || item.runtime.android).state === 'connected' || item.runtime.philips && item.runtime.philips.paired && !item.runtime.philips.hasError) ? 'Ready' : 'Not connected' : 'Enabled');
+  }
+  function addonSections(t) {
+    var state = ADDONS.state(), rows = [], ids, item, current, candidate, actions, pending = state.pending || {};
+    var busy = state.busy || pending.status === 'awaiting-confirmation' || pending.status === 'checking';
+    if (t.group === 'addons') {
+      t.addonTab = t.addonTab || 'installed';
+      rows.push({ id: 'addon-tabs', horizontal: true, tabs: true, items: [
+        { action: 'addon.tab.installed', label: translate('Installed'), tab: true, active: t.addonTab === 'installed' },
+        { action: 'addon.tab.discover', label: translate('Discover'), tab: true, active: t.addonTab === 'discover' },
+        { action: 'addon.refresh', label: translate('Refresh catalog'), disabled: busy }
+      ] });
+      ids = t.addonTab === 'installed' ? Object.keys(state.installed) : state.catalog.map(function (entry) { return entry.id; });
+      for (var i = 0; i < ids.length; i += 3) rows.push({ id: 'addon-cards-' + i, horizontal: true, cards: true, items: ids.slice(i, i + 3).map(function (id) {
+        var entry = addonItem(id, state);
+        return { action: 'addon.details.' + id, label: entry.name, addon: entry, description: addonDescription(entry), status: addonStatus(entry, state) };
+      }) });
+      return rows;
+    }
+    t.addonId = t.addonId || Object.keys(state.installed)[0] || (state.catalog[0] || {}).id;
+    item = addonItem(t.addonId, state);
+    if (!item) return rows;
+    current = state.installed[item.id];
+    state.catalog.some(function (entry) { if (entry.id === item.id) { candidate = entry; return true; } return false; });
+    actions = [];
+    if (candidate && (!current || candidate.version !== current.version || candidate.versionCode && candidate.versionCode !== current.versionCode)) actions.push({ action: 'addon.install.' + item.id, label: translate(current ? 'Update' : 'Download'), disabled: busy });
+    if (current) {
+      if (item.kind === 'native') actions.push({ action: 'addon.setup.' + item.id, label: addonText('Set up'), disabled: busy });
+      else if (item.id === 'spotify') actions.push({ action: 'group.spotify', label: translate('Settings'), disabled: busy });
+      actions.push({ action: 'addon.toggle.' + item.id, label: translate(item.kind === 'native' ? item.runtime && item.runtime.enabled ? 'Disable' : 'Enable' : item.enabled === false ? 'Enable' : 'Disable'), disabled: busy || item.kind === 'native' && (!item.runtime || typeof item.runtime.enabled !== 'boolean') });
+      actions.push({ action: 'addon.remove.' + item.id, label: translate('Uninstall'), disabled: busy });
+    }
+    if (actions.length) rows.push({ id: 'addon-actions', horizontal: true, items: actions });
+    return rows;
+  }
+  function addonIcon(item) {
+    if (item.id === 'spotify' || item.kind === 'spotify') return '<span class="addon-icon addon-icon-spotify">' + markHtml('spotify', 72, 72, 72) + '</span>';
+    return '<span class="addon-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true">' + (item.kind === 'native'
+      ? '<rect x="7" y="2" width="10" height="20" rx="4"/><circle cx="12" cy="8" r="2.5"/><path d="M10 15h4m-4 3h4"/>'
+      : '<path d="m3 7 9-4 9 4v10l-9 4-9-4V7Zm0 0 9 4 9-4M12 11v10M7.5 5l9 4"/>') + '</svg></span>';
+  }
   function detailParentName() { var parent = S.stack[S.stack.length - 2]; return parent && parent.id === 'appearance' ? translate(DETAIL_NAMES[parent.group]) : translate('Settings'); }
   function detailRows(t) {
     var rows = [[{ action: 'settings.back', label: detailParentName() }]];
     detailSections(t).forEach(function (section) {
-      var enabled = section.items.filter(function (item) { return !item.disabled; });
+      var enabled = section.items.filter(function (item) { return t.group === 'addons' || t.group === 'addon-detail' || t.group === 'remote' || !item.disabled; });
       if (section.horizontal && enabled.length) rows.push(enabled);
       else enabled.forEach(function (item) { rows.push([item]); });
     });
@@ -1012,14 +1061,31 @@
     } else if (item.axis === 'mode') applyRotation(item.value);
     else if (HOME_OPTIONS.indexOf(item.axis) >= 0) applyHomeOption(item.axis, item.value);
     else if (item.axis) { patch[item.axis] = item.value; setLook(patch, { row: item.axis }); }
-    else if (item.action.indexOf('addon.') === 0) { var parts = item.action.split('.'); if (parts[1] === 'remove') push({ id: 'message', msg: 'addonRemove', addonId: parts[2], content: { title: translate('Uninstall add-on?'), line: translate('The widget is removed. Saved account and appearance settings are retained.'), actions: [['back', translate('Cancel')], ['addonRemove', translate('Uninstall')]] }, f: { b: 0 } }); else ADDONS.request(parts[1], parts[2]); }
+    else if (item.action.indexOf('addon.') === 0) {
+      var parts = item.action.split('.'), addon = addonItem(parts.slice(2).join('.'), ADDONS.state());
+      if (parts[1] === 'tab') { t.addonTab = parts[2]; t.addonScroll = 0; }
+      else if (parts[1] === 'details') { t.addonScroll = appearanceRows.scrollTop; openAppearance('addon-detail'); top().addonId = parts.slice(2).join('.'); }
+      else if (parts[1] === 'setup') { SETUP.poll('remote'); openAppearance('remote'); }
+      else if (parts[1] === 'remove') push({ id: 'message', msg: 'addonRemove', addonId: addon.id, content: { title: translate('Uninstall add-on?'), line: addon.kind === 'native' ? addonText('Android will ask you to confirm removal. Pairings stored by this add-on are removed.') : translate('The widget is removed. Saved account and appearance settings are retained.'), actions: [['back', translate('Cancel')], ['addonRemove', translate('Uninstall')]] }, f: { b: 0 } });
+      else ADDONS.request(parts[1], parts.slice(2).join('.'));
+    }
     else if (item.action.indexOf('group.') === 0) { if (item.action === 'group.editor') openEditor('settings'); else openAppearance(item.action.substring(6)); }
     else if (item.action === 'background.wallpaper') openWallpaper();
     else if (item.action === 'background.rotation') openAppearance('rotation');
     else if (item.action === 'samsung.home') perform(ORIGINAL_HOME, FrameDevice.home);
     else if (item.action === 'samsung.settings') perform(translate('TV settings'), FrameDevice.settings);
     else if (item.action === 'spotify.access') perform(translate('Media access'), FrameDevice.spotify.access);
-    else if (item.action === 'spotify.signin') perform(translate('Spotify account'), function (done) { FrameDevice.spotify.signIn(S.c.language, done); });
+    else if (item.action === 'spotify.signin') { SETUP.signIn(); openAppearance('spotify-link'); }
+    else if (item.action === 'spotify.retry-link') SETUP.signIn();
+    else if (item.action.indexOf('remote.') === 0) {
+      var operation = item.action.substring(7);
+      if (operation === 'pairing-access') perform('iPhone Remote', function (done) { FrameDevice.remotePermission('pairing', done); });
+      else if (operation.indexOf('keyboard-') === 0) perform('iPhone Remote', function (done) { FrameDevice.remotePermission(operation.substring(9), done); });
+      else if (operation.indexOf('forget.') === 0) {
+        var device = ((SETUP.remote().apple || {}).devices || [])[Number(operation.substring(7))];
+        if (device) push({ id: 'message', msg: 'remoteForget', deviceId: device.id, content: { title: S.c.language === 'de' ? 'Kopplung entfernen?' : 'Remove pairing?', line: S.c.language === 'de' ? 'Dieses iPhone muss anschließend erneut gekoppelt werden.' : 'This iPhone will need to pair again.', actions: [['back', translate('Cancel')], ['remoteForget', translate('Remove')]] }, f: { b: 0 } });
+      } else SETUP.command(operation);
+    }
     else if (item.action === 'spotify.signout') push({ id: 'message', msg: 'signout', content: { title: translate('Sign out of Spotify?'), line: translate('Disconnect your Spotify account from CleanFrame.'), note: translate('The Spotify app stays signed in and music keeps playing.'), actions: [['back', translate('Cancel')], ['signout', translate('Sign out')]] }, f: { b: 0 } });
     else if (item.action === 'spotify.open') perform('Spotify', function (done) { FrameDevice.launchApp('com.spotify.tv.android', done); });
   }
@@ -1064,7 +1130,7 @@
       if (k === 'left') t.f.b = Math.max(0, t.f.b - 1);
       else if (k === 'right') t.f.b = Math.min(A.length - 1, t.f.b + 1);
       else if (k === 'back') pop();
-      else if (k === 'ok') { a = A[t.f.b][0]; pop(); if (a === 'samsung') perform(ORIGINAL_HOME, FrameDevice.home); else if (a === 'addonRemove') ADDONS.request('remove', t.addonId); else if (a === 'signout') perform(translate('Spotify account'), FrameDevice.spotify.signOut); }
+      else if (k === 'ok') { a = A[t.f.b][0]; pop(); if (a === 'samsung') perform(ORIGINAL_HOME, FrameDevice.home); else if (a === 'addonRemove') ADDONS.request('remove', t.addonId); else if (a === 'remoteForget') SETUP.command('unpair', t.deviceId); else if (a === 'signout') perform(translate('Spotify account'), FrameDevice.spotify.signOut); }
     },
     point: function (t, z, i) { if (z === 'act') { t.f.b = i; this.key(t, 'ok'); } }
   };
@@ -1136,6 +1202,7 @@
     var t = top(), sheet = !!V[t.id].sheet, shown = wall(S.shown ? S.shown.wall : S.c.wall), palette = ADAPTIVE_INK[shown.id];
     var adaptive = applyAdaptiveInk(palette), tr = adaptive && palette.tr ? palette.tr.pol : shown.ut.tr, br = adaptive && palette.br ? palette.br.pol : shown.ut.br;
     stage.className = (ANDROID ? 'stage is-android bg-' : 'stage bg-') + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '') + (spotifyVisible() ? ' has-spotify' : '') + (spotifyExpanded() ? ' spotify-focused' : '') + ' cp-' + S.c.controlsPosition + (utilsStacked() ? ' util-stacked' : '') + (utilsTop() ? ' util-at-top' : ' util-at-bottom');
+    if (t.id === 'appearance' && (t.group === 'addons' || t.group === 'addon-detail' || t.group === 'remote' || t.group === 'spotify-link')) stage.className += ' is-addon-manager';
     if (!adaptive && shown.clockInk) stage.style.setProperty('--clock-ink', shown.clockInk);
     else stage.style.removeProperty('--clock-ink');
     if (!adaptive && shown.dockClockInk) stage.style.setProperty('--dock-clock-ink', shown.dockClockInk);
@@ -1624,6 +1691,52 @@
     }
     FILLS[t.id](t, slotEls);
   }
+  function renderAddonManager(t, command) {
+    var state = ADDONS.state(), sections = detailSections(t), item = t.group === 'addon-detail' ? addonItem(t.addonId, state) : null;
+    var scrollTop = appearanceRows.scrollTop, content = '', runtime, installed;
+    function value(label, text) { return '<section class="addon-fact"><h3>' + esc(addonText(label)) + '</h3><p>' + esc(text) + '</p></section>'; }
+    function connection(entry) { return addonText(entry && (entry.state === 'connected' || entry.connected === true) ? 'Connected' : 'Not connected'); }
+    appearanceRows.className = 'appearance-rows addon-manager';
+    appearanceTitle.textContent = item ? item.name : translate('Add-ons');
+    if (t.group === 'addon-detail') {
+      if (item) {
+        installed = state.installed[item.id]; runtime = item.runtime || {};
+        content += '<section id="addonSummary" class="addon-summary">' + addonIcon(item) + '<span class="addon-summary-copy"><span class="addon-status">' + esc(addonStatus(item, state)) + '</span><span class="addon-description">' + esc(addonDescription(item)) + '</span></span></section>';
+      } else content += '<section class="addon-empty"><h3>' + esc(addonText('Extension unavailable')) + '</h3><p>' + esc(addonText('The package is no longer in the catalog.')) + '</p></section>';
+    }
+    content += sections.map(function (section) {
+      return '<section class="setting-section' + (section.horizontal ? ' is-horizontal' : '') + (section.cards ? ' addon-card-row' : '') + (section.tabs ? ' addon-tabs' : '') + ' section-' + section.id + '"><div class="setting-options"' + (section.tabs ? ' role="tablist"' : '') + '>' + section.items.map(function (entry) {
+        if (entry.addon) return command(entry, addonIcon(entry.addon) + '<span class="setting-copy"><span class="setting-name">' + esc(entry.label) + '</span><span class="setting-description">' + esc(entry.description) + '</span><span class="addon-status">' + esc(entry.status) + '</span></span>', 'addon-card');
+        return command(entry, '<span>' + esc(entry.label) + '</span>', section.tabs ? 'addon-tab' + (entry.active ? ' is-current' : '') : 'addon-action');
+      }).join('') + '</div></section>';
+    }).join('');
+    if (t.group === 'addons' && sections.length === 1) content += '<section id="addonEmpty" class="addon-empty"><h3>' + esc(addonText(t.addonTab === 'installed' ? 'No installed add-ons' : 'No catalog available')) + '</h3><p>' + esc(addonText(t.addonTab === 'installed' ? 'Find extensions in Discover.' : 'Refresh the catalog to see approved extensions.')) + '</p></section>';
+    if (item) {
+      content += '<section id="addonMetadata" class="addon-metadata">' + value('Version', item.version || addonText('Not provided')) + value('Provider', item.author || item.provider || addonText('Not provided')) + value('License', item.license || addonText('Not provided')) + value('Permissions', Array.isArray(item.permissions) ? item.permissions.map(addonText).join(' · ') || addonText('No additional permissions') : item.permissions || addonText('Not provided')) + '</section>';
+      if (item.kind === 'native') content += '<section id="addonConnections" class="addon-metadata">' + value('Installation', addonText(installed ? 'Installed' : 'Not installed')) + value('Android connection', runtime.philips && runtime.philips.paired && !runtime.philips.hasError ? addonText(runtime.philips.state === 'connected' ? 'Connected' : 'Ready') : connection(runtime.philips || runtime.android)) + value('iPhone pairing', runtime.apple && (runtime.apple.connected || runtime.apple.state === 'connected') ? addonText('Connected') : runtime.apple && (runtime.apple.pairedDevices || runtime.apple.devices && runtime.apple.devices.length) ? addonText('Paired') : addonText('Not paired')) + '</section>';
+    }
+    setHTML(appearanceRows, content);
+    appearanceRows.scrollTop = t.addonScroll !== undefined ? t.addonScroll : scrollTop;
+    t.addonScroll = undefined;
+    var selected = appearanceRows.querySelector('.is-focus');
+    if (selected) selected.scrollIntoView({ block: 'nearest' });
+    setHTML(appearanceStatus, state.busy || state.pending && (state.pending.status === 'awaiting-confirmation' || state.pending.status === 'checking') ? '<p class="addon-progress">' + esc(state.busy ? translate('Working…') : addonText('Confirm the operation in Android.')) + '</p>' : state.error ? '<p class="setting-error">' + esc(state.error) + '</p>' : '');
+    setHTML(appearanceDesc, '<span class="remote-key">OK</span><span>' + esc(addonText(t.group === 'addons' ? 'Choose an extension' : 'Manage extension')) + '</span>');
+  }
+  function renderAddonSetup(t, command) {
+    var copy = SETUP.copy(S.c.language), link = SETUP.link(), scroll = appearanceRows.scrollTop, remote = t.group === 'remote';
+    function text(de, en) { return S.c.language === 'de' ? de : en; }
+    var body = '<div class="addon-setup-copy">' + detailSections(t).map(function (section) {
+      return '<section class="setting-section"><h3 class="setting-label">' + esc(section.title) + '</h3><p class="setting-reason">' + esc(section.reason) + '</p><div class="setting-options">' + section.items.map(function (item) { return command(item, '<span>' + esc(item.label) + '</span>', 'addon-action'); }).join('') + '</div></section>';
+    }).join('') + '</div>';
+    setHTML(appearanceRows, body); appearanceRows.scrollTop = scroll;
+    body = '<aside class="addon-setup-status">';
+    if (remote) body += '<h3>' + text('Verbindungen', 'Connections') + '</h3><dl><dt>' + text('Fernseher', 'Television') + '</dt><dd>' + esc(copy.television) + '</dd><dt>iPhone</dt><dd>' + esc(copy.iphone) + '</dd><dt>' + text('Tastatur', 'Keyboard') + '</dt><dd>' + esc(copy.keyboard) + '</dd></dl><h3>' + text('iPhone Kopplungscode', 'iPhone pairing code') + '</h3><div id="remotePairPin" class="addon-pair-pin">' + esc(copy.code) + '</div><p id="remotePairTime">' + esc(copy.time) + '</p><p class="setting-reason">' + text('Der Code gilt zwei Minuten. Bereits gekoppelte Geräte bleiben gespeichert.', 'The code is valid for two minutes. Existing pairings remain saved.') + '</p>';
+    else body += '<h3>' + text('Mit dem Handy anmelden', 'Sign in with your phone') + '</h3>' + (/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(link.qr || '') && link.phase === 'pending' && link.expiresAt > Date.now() ? '<img id="spotifyPairQr" class="addon-pair-qr" src="' + esc(link.qr) + '" alt="Spotify QR">' : '<div class="addon-pair-placeholder">' + (window.CleanFramePreview && link.phase === 'pending' ? text('QR Vorschau', 'QR preview') : icon(link.phase === 'connected' ? 'check' : 'settings')) + '</div>') + '<p>' + esc(copy.link) + '</p>' + (link.phase === 'pending' ? '<p>' + esc(link.code || '') + ' · ' + SETUP.remaining(link.expiresAt / 1000) + '</p>' : '');
+    setHTML(appearanceStatus, body + (copy.error ? '<p class="setting-error">' + esc(copy.error) + '</p>' : '') + '</aside>');
+    var selected = appearanceRows.querySelector('.is-focus'); if (selected) selected.scrollIntoView({ block: 'nearest' });
+    setHTML(appearanceDesc, '<span class="remote-key">OK</span><span>' + text('Ausgewählte Aktion ausführen', 'Perform selected action') + '</span>');
+  }
   function renderAppearance(t) {
     appearanceEl.hidden = !isSettingsDetail(t);
     if (appearanceEl.hidden) { appearanceEl.removeAttribute('aria-modal'); return; }
@@ -1638,11 +1751,13 @@
       var applied = item.axis && S.c[item.axis] === item.value;
       var loading = !!(item.axis && S.pending && S.pending.target[item.axis] === item.value && S.pending.row === item.axis);
       return '<button type="button" tabindex="-1" class="setting-choice' + (cls ? ' ' + cls : '') + (t.f.action === item.action ? ' is-focus' : '') + (item.disabled ? ' is-disabled' : '') + (applied ? ' is-applied' : '') + (loading ? ' is-loading' : '') + '"'
-        + (item.axis ? ' role="radio" aria-checked="' + !!applied + '"' : '') + ' aria-label="' + esc(item.axis && item.value === 'both' ? translate('Icons and text') : translate(item.label)) + '" aria-disabled="' + !!item.disabled + '" aria-busy="' + loading + '"'
+        + (item.axis ? ' role="radio" aria-checked="' + !!applied + '"' : item.tab ? ' role="tab" aria-selected="' + !!item.active + '"' : '') + ' aria-label="' + esc(item.axis && item.value === 'both' ? translate('Icons and text') : translate(item.label)) + '" aria-disabled="' + !!item.disabled + '" aria-busy="' + loading + '"'
         + ' data-z="detail" data-i="0" data-id="' + item.action + '" data-action="' + item.action + '">' + inner
         + (item.axis ? '<span class="setting-tick" aria-hidden="true">' + (applied ? icon('check') : '') + '</span>' : '') + '</button>';
     }
     setHTML(appearanceBack, command({ action: 'settings.back', label: detailParentName() }, icon('left') + '<span>' + (detailParentName()) + '</span>', 'setting-back'));
+    if (t.group === 'addons' || t.group === 'addon-detail') { renderAddonManager(t, command); return; }
+    if (t.group === 'remote' || t.group === 'spotify-link') { renderAddonSetup(t, command); return; }
     setHTML(appearanceRows, detailSections(t).map(function (section) {
       if (section.slider) return '<section class="setting-section section-spotifyTransparency"><h3 class="setting-label">' + translate(section.title) + '</h3>'
         + '<div class="setting-slider' + (t.f.action === 'spotify.transparency' ? ' is-selected' : '') + '"><input class="' + (t.f.action === 'spotify.transparency' ? 'is-focus' : '') + '" type="range" min="0" max="100" step="5" tabindex="-1" aria-label="' + translate('Transparency') + '" data-z="detail" data-i="0" data-id="spotify.transparency" data-action="spotify.transparency"><output></output></div>'
@@ -1662,7 +1777,6 @@
         }).join('') + '</div>'
         + (section.reason ? '<p class="setting-reason">' + esc(translate(section.reason)) + '</p>' : '') + '</section>';
     }).join(''));
-    if (t.group === 'addons') { var selectedAddon = appearanceRows.querySelector('.is-focus'); if (selectedAddon) selectedAddon.scrollIntoView({ block: 'nearest' }); }
     var slider = appearanceRows.querySelector('input[type="range"]');
     if (slider) {
       slider.value = S.c.spotifyTransparency;
@@ -2156,6 +2270,20 @@
     }
   });
   window.addEventListener('resize', fit);
+  window.setInterval(function () {
+    if (!S.c || document.hidden || top().id !== 'appearance' || (top().group !== 'remote' && top().group !== 'spotify-link')) return;
+    SETUP.poll(top().group); norm(); render();
+  }, 1000);
+  window.addEventListener('cleanframe:spotify-link', function () { if (S.c && top().group === 'spotify-link') { SETUP.poll('spotify-link'); render(); } });
+  function openRequestedAddon() {
+    if (!window.CleanFrameNative || typeof window.CleanFrameNative.requestedAddon !== 'function' || !S.c) return;
+    if (window.CleanFrameNative.requestedAddon() !== 'apple-remote') return;
+    while (S.stack.length > 1) pop();
+    openSettings(); openAppearance('addons'); openAppearance('addon-detail'); top().addonId = 'apple-remote';
+    SETUP.poll('remote'); openAppearance('remote'); norm(); render();
+  }
+  window.addEventListener('cleanframe:open-addon', openRequestedAddon);
+  window.setTimeout(openRequestedAddon, 1000);
   window.addEventListener('cleanframe:addons', function () { if (S.c) { norm(); render(); } });
   window.addEventListener('cleanframe:spotify', function (event) { if (SPOTIFY) receiveSpotify(event.detail); });
 
@@ -2199,9 +2327,10 @@
     return QA.state();
   };
   if (window.CleanFramePreview) {
-    QA.editorScene = function (name) {
+    QA.editorScene = function (name, addonId) {
       goScene('home');
-      if (name.indexOf('appearance.') === 0) { openSettings(); openAppearance(name.substring(11)); }
+      if (name.indexOf('appearance.') === 0) { openSettings(); openAppearance(name.substring(11)); if (name === 'appearance.addon-detail') top().addonId = addonId || 'spotify'; }
+      else if (name === 'message.addonRemove') { openSettings(); openAppearance('addon-detail'); top().addonId = addonId || 'spotify'; detailOk(top(), { action: 'addon.remove.' + top().addonId }); }
       else if (name === 'wallpaper') { openSettings(); openAppearance('background'); openWallpaper(); }
       else if (name === 'message.signout') { openSettings(); openAppearance('spotify'); detailOk(top(), { action: 'spotify.signout' }); }
       else if (name === 'message.leave') openMessage('leave');

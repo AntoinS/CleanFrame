@@ -1,9 +1,11 @@
 /* Local visual editor. Production UI and its preference paths remain authoritative. */
 import {pixelRatio,snapBox} from './geometry.js';
+import {initAddonLab} from './addon-lab.js';
 import {initWorkspace} from './workspace.js';
 const $=id=>document.getElementById(id), clone=value=>JSON.parse(JSON.stringify(value));
-const scenes={'appearance.display':'Anzeige','appearance.homescreen':'Startbildschirm','appearance.addons':'Add-ons',home:'Home',apps:'Alle Apps',settings:'Einstellungen',editor:'Apps auf Home',wallpaper:'Hintergrundauswahl','appearance.background':'Hintergrund','appearance.layout':'Layout','appearance.typography':'Schrift','appearance.focus':'Fokus','appearance.rotation':'Bildwechsel','appearance.clock':'Uhr und Datum','appearance.spotify':'Spotify','appearance.language':'Sprache','appearance.samsung':'Android TV','message.leave':'Home verlassen','message.signout':'Spotify abmelden','message.error':'Fehlermeldung',qr:'Spotify QR Anmeldung'};
+const scenes={'appearance.remote':'iPhone Remote Einrichtung','appearance.spotify-link':'Spotify Anmeldung','appearance.display':'Anzeige','appearance.homescreen':'Startbildschirm','appearance.addons':'Add-ons','appearance.addon-detail':'Add-on Details',home:'Home',apps:'Alle Apps',settings:'Einstellungen',editor:'Apps auf Home',wallpaper:'Hintergrundauswahl','appearance.background':'Hintergrund','appearance.layout':'Layout','appearance.typography':'Schrift','appearance.focus':'Fokus','appearance.rotation':'Bildwechsel','appearance.clock':'Uhr und Datum','appearance.spotify':'Spotify','appearance.language':'Sprache','appearance.samsung':'Android TV','message.leave':'Home verlassen','message.signout':'Spotify abmelden','message.addonRemove':'Add-on entfernen','message.error':'Fehlermeldung',qr:'Spotify QR Anmeldung'};
 const prefDefs={bg:['Hintergrund',{photo:'Foto',dark:'Dunkel',light:'Hell'}],wall:['Foto',Object.fromEntries(['summit','cove','forest','valley','peaks','alpine','ridge','amber','mint','sydney','goldcoast','bridge','night','golden','misty'].map(x=>[x,x]))],apps:['App Darstellung',{icons:'Symbole',text:'Text',both:'Symbole und Text'}],controls:['Home Bedienelemente',{icons:'Symbole',text:'Text',both:'Symbole und Text'}],controlsPosition:['Position der Bedienelemente',{auto:'Automatisch',top:'Oben rechts',bottom:'Unten rechts'}],font:['Schriftfamilie',{manrope:'Manrope',geist:'Geist',newsreader:'Newsreader'}],focus:['Auswahl',{glass:'Glas',type:'Schrift'}],material:['Material',{soft:'Weich',frost:'Matt',tint:'Klar'}],spotifySurface:['Playerfläche',{dark:'Dunkel',light:'Hell',cover:'Coverfarbe'}],spotifyTransparency:['Player Transparenz',null],dateVisible:['Datum anzeigen',true],spotifyEnabled:['Spotify Player anzeigen',true]};
+let importing=false;
 let project,etag,token,source,dirty=false,saving=null,saveTimer,conflicted=false,ready=false,loading=false,entries=[],selected=null,dragging=false,lastList='',revision=0;
 const iframe=$('preview'), win=()=>iframe.contentWindow, qa=()=>win()?.ShoreQA, design=()=>win()?.CleanFrameDesign;
 function notice(message){$('notice').textContent=message;}
@@ -24,13 +26,26 @@ async function save(){
  await saving;if(dirty)return save();
 }
 function report(error){status('Nicht gespeichert');notice(error.message);}
-function content(){return {design:clone(project.design),preferences:clone(project.preferences),guides:clone(project.guides||[])};}
+function content(){const value={design:clone(project.design),preferences:clone(project.preferences),guides:clone(project.guides||[])};for(const key of ['basePrefs','baseCapturedAt','tvSource','addonLab'])if(project[key]!==undefined)value[key]=clone(project[key]);return value;}
+function restoreContent(value){project.design=value.design;project.preferences=value.preferences;project.guides=value.guides||[];for(const key of ['basePrefs','baseCapturedAt','tvSource','addonLab']){if(value[key]!==undefined)project[key]=clone(value[key]);else if(key==='tvSource'||key==='addonLab')delete project[key];}}
+async function importTv(){
+ if(importing||loading)return;
+ importing=true;$('importTv').disabled=true;$('importTv').textContent='TV wird gelesen …';
+ const message=document.createElement('p');message.textContent='Design, Einstellungen und Apps werden vom Fernseher gelesen. Dein bisheriger Entwurf wird automatisch als Zwischenstand gesichert.';
+ dialog('TV-Stand holen',message);$('dialogCancel').disabled=true;
+ try{
+  await save();if(conflicted)throw Error('Bitte zuerst den Entwurfskonflikt auflösen.');
+  const result=await request('tv/import',{});
+  ready=false;dirty=false;await boot();return result;
+ }finally{importing=false;$('dialogCancel').disabled=false;$('dialog').close();$('importTv').disabled=false;$('importTv').textContent='TV-Stand holen';}
+}
+$('dialog').addEventListener('cancel',event=>{if(importing)event.preventDefault();});
 function remember(){project.undo??=[];project.undo.push(content());if(project.undo.length>50)project.undo.shift();project.redo=[];historyButtons();}
 function historyButtons(){$('undo').disabled=!project?.undo?.length;$('redo').disabled=!project?.redo?.length;}
 async function history(direction){
  const stack=project[direction];if(!stack.length)return;
  const target=stack.pop(),other=direction==='undo'?'redo':'undo';project[other].push(content());
- project.design=target.design;project.preferences=target.preferences;project.guides=target.guides||[];historyButtons();changed();await loadFrame();
+ restoreContent(target);historyButtons();changed();await loadFrame();
 }
 function uiChange(key,value){project.ui[key]=value;changed();}
 function syncControls(){
@@ -41,7 +56,7 @@ function syncControls(){
  $('overlay').hidden=project.ui.mode!=='edit';$('canvasHint').textContent=project.ui.mode==='edit'?'Element anklicken und ziehen. Alt für feine Schritte.':'Mit Pfeiltasten, Enter und Escape ausprobieren.';
  $('nativeBadge').hidden=project.ui.view!=='qr';$('viewTitle').textContent=scenes[project.ui.view]||'Vorschau';
  Object.entries(prefDefs).forEach(([key])=>{const el=$('pref-'+key);if(!el)return;if(el.type==='checkbox')el.checked=project.preferences[key];else el.value=project.preferences[key];});
- if(project.baseCapturedAt){const date=new Date(project.baseCapturedAt);$('baselineAge').textContent='Ausgangsstand: lokale Sicherung vom '+(Number.isNaN(date.getTime())?project.baseCapturedAt:date.toLocaleDateString('de-DE'))+'.';}historyButtons();resize();
+ if(project.baseCapturedAt){const date=new Date(project.baseCapturedAt);$('baselineAge').textContent=(project.tvSource?'TV '+project.tvSource.version+' · abgerufen am ':'Ausgangsstand: lokale Sicherung vom ')+(Number.isNaN(date.getTime())?project.baseCapturedAt:date.toLocaleString('de-DE'))+'.';}historyButtons();resize();
 }
 function resize(){
  const area=$('canvas'),css=getComputedStyle(area),availableWidth=area.clientWidth-parseFloat(css.paddingLeft)-parseFloat(css.paddingRight),availableHeight=area.clientHeight-parseFloat(css.paddingTop)-parseFloat(css.paddingBottom)-$('canvasHint').offsetHeight-16-$('canvas').querySelector('.canvas-caption').offsetHeight-36;
@@ -60,13 +75,13 @@ async function loadFrame(){
   win().document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='z'){event.preventDefault();event.stopImmediatePropagation();history(event.shiftKey?'redo':'undo');}},true);
   design().set(clone(project.design));
   await showScene(state);if(project.ui.mode==='test'&&focus)qa().focus(focus);
-  ready=true;syncControls();refresh(true);notice('Vorschau mit Beispieldaten. Dein TV bleibt unverändert.');
+  ready=true;syncControls();refresh(true);document.dispatchEvent(new Event('editor:frame'));notice('Vorschau mit Beispieldaten. Dein TV bleibt unverändert.');
  }finally{loading=false;if(!dirty)status('Auf diesem Mac gespeichert');}
 }
 async function showScene(scene){
  await waitReady();
  if(scene==='qr'){qa().editorScene('home');win().CleanFrameQR.show();}
- else{win().CleanFrameQR?.hide();qa().editorScene(scene);if(scene==='home')qa().playerView(project.ui.state==='expanded',project.ui.mode==='edit');}
+ else{win().CleanFrameQR?.hide();qa().editorScene(scene,project.addonLab?.selected);if(scene==='home')qa().playerView(project.ui.state==='expanded',project.ui.mode==='edit');}
  await waitReady();syncControls();refresh(true);
 }
 function context(){return design().context();}
@@ -139,7 +154,7 @@ function layoutIssues(){const issues=[];const all=design().elements();for(const 
 function showIssues(){const issues=layoutIssues();$('issues').hidden=false;$('issues').replaceChildren();const title=document.createElement('strong');title.textContent=issues.length?issues.length+' Hinweise für diese Ansicht':'Diese Ansicht liegt innerhalb des Bildes.';$('issues').append(title);if(issues.length){const list=document.createElement('ul');issues.forEach(text=>{const li=document.createElement('li');li.textContent=text;list.append(li);});$('issues').append(list);}return issues;}
 function dialog(title,body,onSubmit){$('dialogTitle').textContent=title;$('dialogBody').replaceChildren(body);$('dialogSave').hidden=!onSubmit;$('dialogForm').onsubmit=event=>{event.preventDefault();Promise.resolve(onSubmit?.()).then(()=>$('dialog').close()).catch(report);};$('dialog').showModal();}
 async function snapshot(){await save();const label=document.createElement('label');label.textContent='Name des Zwischenstands';const input=document.createElement('input');input.maxLength=80;input.required=true;input.placeholder='Zum Beispiel: kleiner Spotify Player';label.append(input);dialog('Zwischenstand speichern',label,async()=>{await request('snapshot',{name:input.value});notice('Zwischenstand gespeichert.');});input.focus();}
-async function versions(){await save();const list=await request('snapshots'),body=document.createElement('div');if(!list.length)body.textContent='Noch keine Zwischenstände gespeichert.';for(const version of list){const row=document.createElement('div');row.className='version';const text=document.createElement('div');text.textContent=version.name;const date=document.createElement('small');date.textContent=version.created;text.append(date);const button=document.createElement('button');button.type='button';button.textContent='Laden';button.onclick=async()=>{try{const result=await request('restore',{id:version.id});remember();project.design=result.project.design;project.preferences=result.project.preferences;project.ui=result.project.ui;project.guides=result.project.guides||[];changed();$('dialog').close();await loadFrame();}catch(error){report(error);}};row.append(text,button);body.append(row);}dialog('Zwischenstände',body);}
+async function versions(){await save();const list=await request('snapshots'),body=document.createElement('div');if(!list.length)body.textContent='Noch keine Zwischenstände gespeichert.';for(const version of list){const row=document.createElement('div');row.className='version';const text=document.createElement('div');text.textContent=version.name;const date=document.createElement('small');date.textContent=version.created;text.append(date);const button=document.createElement('button');button.type='button';button.textContent='Laden';button.onclick=async()=>{try{const result=await request('restore',{id:version.id});remember();restoreContent(result.project);project.ui=result.project.ui;changed();$('dialog').close();await loadFrame();}catch(error){report(error);}};row.append(text,button);body.append(row);}dialog('Zwischenstände',body);}
 let jobTimer;
 async function pollJob(){try{const job=await request('job');if(job.state==='idle')return;const labels={freezing:'Stand sichern',checking:'Oberfläche und Bedienung prüfen',building:'Android App bauen',ready:'TV-Version ist vorbereitet',failed:'Vorbereitung fehlgeschlagen'};const root=$('release');root.hidden=false;root.replaceChildren();const title=document.createElement('strong');title.textContent=labels[job.state]||job.state;root.append(title);const p=document.createElement('p');p.textContent=job.message||'';root.append(p);if(job.path){const details=document.createElement('details'),summary=document.createElement('summary'),path=document.createElement('code');summary.textContent='Gespeicherten Stand anzeigen';path.textContent=job.path;details.append(summary,path);root.append(details);}if(['ready','failed'].includes(job.state)){$('prepare').disabled=false;if(job.state==='ready')notice('TV-Version gespeichert. Der Verbindungsstatus prüft, ob sie noch zum Entwurf passt.');}else jobTimer=setTimeout(pollJob,2000);}catch(error){report(error);$('prepare').disabled=false;}}
 async function prepare(){await save();if(conflicted)return;showIssues();$('prepare').disabled=true;try{await request('prepare',{});clearTimeout(jobTimer);await pollJob();}catch(error){$('prepare').disabled=false;report(error);}}
@@ -156,8 +171,9 @@ for(const button of document.querySelectorAll('[data-align]'))button.onclick=()=
 window.addEventListener('resize',resize);new ResizeObserver(resize).observe($('canvas'));
 window.addEventListener('keydown',event=>{if(document.body.classList.contains('live-mode'))return;if(event.target.matches('input,select,textarea')||$('dialog').open)return;if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='z'){event.preventDefault();history(event.shiftKey?'redo':'undo');return;}if(project?.ui.mode==='test'){const key={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',Enter:'ok',Escape:'back'}[event.key];if(key){event.preventDefault();remote(key);}}else if(selected&&event.key.startsWith('Arrow')){event.preventDefault();const step=(event.altKey?1:project.ui.snap?8:1)/pixelRatio(project.ui.resolution),dx=event.key==='ArrowLeft'?-step:event.key==='ArrowRight'?step:0,dy=event.key==='ArrowUp'?-step:event.key==='ArrowDown'?step:0;patch({offsetX:(selected.style.offsetX||0)+dx,offsetY:(selected.style.offsetY||0)+dy});}});
 window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
-setInterval(()=>{if(ready&&!loading&&!dragging)refresh();},350);
-setInterval(async()=>{if(!ready||loading||dragging||saving)return;try{const state=await request('watch');token=state.token||token;if(state.etag!==etag){if(dirty){conflicted=true;$('conflict').hidden=false;$('conflict').querySelector('span').textContent='Der Entwurf wurde gleichzeitig an anderer Stelle geändert.';}else await boot();}else if(state.source!==source){source=state.source;await loadFrame();notice('Quellcode aktualisiert. Dein Entwurf bleibt erhalten.');}}catch(error){notice(error.message);}},2500);
-window.CleanFrameEditor={get ready(){return ready&&!loading;},get project(){return clone(project);},save,select,patch,layoutIssues,refresh,loadFrame,request,get entries(){return clone(entries);},get selected(){return selected?clone(selected):null;},get liveProject(){return project;},get etag(){return etag;},remember,changed,resize,notice,boot,qa,design,win,report};
+setInterval(()=>{if(ready&&!loading&&!dragging&&!importing)refresh();},350);
+setInterval(async()=>{if(!ready||loading||dragging||saving||importing)return;try{const state=await request('watch');token=state.token||token;if(state.etag!==etag){if(dirty){conflicted=true;$('conflict').hidden=false;$('conflict').querySelector('span').textContent='Der Entwurf wurde gleichzeitig an anderer Stelle geändert.';}else await boot();}else if(state.source!==source){source=state.source;await loadFrame();notice('Quellcode aktualisiert. Dein Entwurf bleibt erhalten.');}}catch(error){notice(error.message);}},2500);
+window.CleanFrameEditor={get ready(){return ready&&!loading;},get project(){return clone(project);},save,select,patch,layoutIssues,refresh,loadFrame,request,get entries(){return clone(entries);},get selected(){return selected?clone(selected):null;},get liveProject(){return project;},get etag(){return etag;},remember,changed,resize,notice,boot,qa,design,win,report,importTv,showScene};
 initWorkspace(window.CleanFrameEditor);
+initAddonLab(window.CleanFrameEditor);
 boot().catch(report);

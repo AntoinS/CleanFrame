@@ -13,7 +13,7 @@ const state = () => page.evaluate(() => ShoreQA.state());
 const scene = name => page.evaluate(name => ShoreQA.scene(name), name);
 const act = action => page.evaluate(action => ShoreQA.activate(action), action);
 const publish = patch => page.evaluate(patch => window.__publish(patch), patch);
-async function group(name) { await scene('settings'); const parent={background:'display',typography:'display',focus:'display',layout:'homescreen',clock:'homescreen',spotify:'addons'}[name]; await act('settings.group.'+(parent||name)); if(parent) await act('group.'+name); }
+async function group(name) { await scene('settings'); const parent={background:'display',typography:'display',focus:'display',layout:'homescreen',clock:'homescreen',spotify:'addons'}[name]; await act('settings.group.'+(parent||name)); if(name==='spotify')await act('addon.details.spotify'); if(parent) await act('group.'+name); }
 page.on('pageerror', error => errors.push(error.message));
 const timezone = await page.context().newCDPSession(page);
 await timezone.send('Emulation.setTimezoneOverride', { timezoneId: 'Europe/Berlin' });
@@ -32,7 +32,7 @@ try {
       spotifyObserve: value => { window.__calls.push(['observe', value]); return '{"ok":true}'; },
       spotifyControl: value => { window.__calls.push(['control', value]); return '{"ok":true}'; },
       spotifyAccess: () => { window.__calls.push(['access']); return '{"ok":true}'; },
-      spotifySignIn: language => { window.__calls.push(['signin', language]); return '{"ok":true}'; }
+      spotifyLink: op => { if(op==='begin')window.__calls.push(['signin']); return JSON.stringify(op==='state'?{phase:'pending',expiresAt:Date.now()+600000}:{ok:true}); }
     };
     if (!localStorage.getItem('cleanframe.home.v1')) localStorage.setItem('cleanframe.home.v1', JSON.stringify({ layout: 'list', bg: 'photo', wallpaper: 'alpine', language: 'de', apps: 'icons', controls: 'both', home: ['youtube', 'netflix', 'spotify'] }));
   });
@@ -182,7 +182,9 @@ try {
   await group('spotify');
   await page.screenshot({ path: out + 'spotify-settings-qr.png', animations: 'disabled' });
   await act('spotify.signin');
-  assert.deepEqual(await page.evaluate(() => __calls.at(-1)), ['signin', 'en']);
+  assert.equal(await page.evaluate(() => __calls.filter(c=>c[0]==='signin').length), 1);
+  assert.equal(await page.locator('#spotifyPairQr').count(),0);
+  await page.keyboard.press('Escape');
   assert.ok(await page.locator('#appearanceRows [data-action="spotify.open"]').evaluate(e => e.getBoundingClientRect().bottom < document.getElementById('appearanceDesc').getBoundingClientRect().top));
   assert.equal(await page.locator('#spotifyCompact').isVisible(), true);
   pass('Translucent dark, light and cover backgrounds update safely; the saved choice survives layout, app edits and reload.');

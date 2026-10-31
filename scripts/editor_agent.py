@@ -29,6 +29,8 @@ Du kannst Position, Größe, Typografie, Farbe, Rundung, Transparenz, Abstände 
 CleanFrame-Einstellungen ändern. Neue Funktionen oder Quellcodeänderungen gehören in den
 Hauptchat mit Codex; sage das klar, wenn es erforderlich ist. Kein TV-Zugriff, keine Installation,
 keine Anmeldung, keine Geheimnisse, keine anderen Werkzeuge, keine weiteren Agenten.
+Für den aktuellen TV-Stand verweise auf den Button „TV-Stand holen“ oben im Editor.
+Er übernimmt Design und Einstellungen als Entwurf und sichert den vorherigen Zwischenstand.
 Behaupte eine Änderung nur nach erfolgreichem editor_apply. Ungeprüfte Ansichten sind ungeprüft.
 '''
 
@@ -283,9 +285,9 @@ class Agent:
             project, etag = self.store.read()
             if args.get('etag') != etag or etag != self.turn_etag:
                 raise ValueError('Entwurf gleichzeitig verändert. Nichts überschrieben. Erneut lesen und den Benutzer bei veralteter Geometrie informieren.')
-            before = copy.deepcopy({k: project[k] for k in ['design', 'preferences']})
-            if 'guides' in project:
-                before['guides'] = copy.deepcopy(project['guides'])
+            before = copy.deepcopy({k: project[k] for k in ['design', 'preferences', 'basePrefs']})
+            for key in ['guides', 'baseCapturedAt', 'tvSource', 'addonLab']:
+                if key in project: before[key] = copy.deepcopy(project[key])
             for incoming in args.get('rules', []):
                 keys = ['view', 'layout', 'state', 'target']
                 rule = next((r for r in project['design']['rules'] if all(r[k] == incoming[k] for k in keys)), None)

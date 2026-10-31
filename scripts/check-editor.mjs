@@ -30,7 +30,7 @@ try{
    await show(scene);assert.ok(await page.locator('#layers button').count()>0,`${width} ${language} ${layout} ${scene}`);
   }
  }
- pass('Every owned view, including dialogs and the marked native QR preview, is editable in both layouts, languages and resolutions.');
+ pass('Every owned view, including dialogs and the shared Spotify QR preview, is editable in both layouts, languages and resolutions.');
  await show('home');await page.selectOption('#layout','dock');await page.selectOption('#resolution','1080');
  await frame().evaluate(()=>{
   CleanFrameDesign.set({version:1,rules:[{view:'home',layout:'dock',state:'*',target:'action:home.app.netflix',style:{offsetX:-300,offsetY:-240}},{view:'home',layout:'dock',state:'compact',target:'spotifyPlayer',style:{height:144,radius:32}}]});

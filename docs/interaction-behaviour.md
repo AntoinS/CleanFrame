@@ -111,3 +111,13 @@ Hidden prelaunch can install a fully loaded wallpaper bundle without waiting for
 ## Android settings in 0.7.0
 
 Five main categories replace the Android overview: Display (Background, Typography, Focus), Home screen (Layout, Apps on Home, Clock and date), Add-ons, Language and Android TV. Back returns one level, including from a display subsection to Display. Spotify settings are reached from its installed add-on. The Tizen overview retains its existing categories. See addons.md for download, removal and offline behaviour.
+
+## Android add-ons in 0.8.0
+
+Add-ons opens a full-width package view. Installed and Discover are separate tabs;
+each card opens a detail screen. Back restores the tab, selected card and scroll
+position. Status refreshes preserve focus. Native packages show installation,
+Android connection and iPhone pairing separately; unavailable controls do not
+pretend that an operation succeeded. Android owns native APK installation and
+removal confirmation. Setup stays in the CleanFrame frontend. Spotify QR sign-in and iPhone pairing, countdown, device removal and keyboard setup share the Add-on settings frame. Only required Android permission/install dialogs and the host-owned translucent Philips code sheet leave the full-screen settings frame. Native services
+are excluded from Home widget rendering and the three-widget quota.

@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,rm,mkdir,readFile} from 'node:fs/promises';
+import os from 'node:os';
+import {openEditor,ready,root} from './editor-browser.mjs';
+const storage=await mkdtemp(os.tmpdir()+'/cleanframe-addon-editor-');
+const app=await openEditor(storage);
+try{
+ const page=await app.browser.newPage({viewport:{width:1680,height:1050}}),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));await page.goto(app.url+'/editor/');await ready(page);
+ await page.click('#addonTab');await page.waitForSelector('body.addon-mode');
+ await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameNative.addons(JSON.stringify({action:'install',id:'apple-remote'})));
+ await page.waitForFunction(()=>window.CleanFrameEditor.liveProject.addonLab?.installed.some(p=>p.id==='apple-remote'));
+ await page.click('[data-addon-command="home"]');assert.equal(await page.evaluate(()=>window.CleanFrameEditor.qa().state().view),'home');
+ await page.fill('#addonText','Grüße 👋🏼');await page.getByRole('button',{name:'Ersetzen',exact:true}).click();assert.match(await page.textContent('#addonTextResult'),/Grüße/);
+ assert.doesNotMatch(await page.textContent('#addonEvents'),/Grüße/);
+ await page.selectOption('#addonScenario','input-unavailable');await page.getByRole('button',{name:'Ersetzen',exact:true}).click();assert.match(await page.textContent('#addonTextResult'),/verworfen/);
+ await page.selectOption('#addonScenario','download-error');await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameNative.addons(JSON.stringify({action:'install',id:'apple-remote'})));
+ await page.waitForFunction(()=>window.CleanFrameEditor.win().CleanFrameAddonMock.state().error.includes('fehlgeschlagen'));
+ assert.equal(await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameAddonMock.state().installed['apple-remote'].version),'0.1.0');
+ await page.selectOption('#addonScenario','cancelled');await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameNative.addons(JSON.stringify({action:'remove',id:'apple-remote'})));await page.waitForTimeout(400);
+ assert.ok(await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameAddonMock.state().installed['apple-remote']));
+ await page.evaluate(()=>window.CleanFrameEditor.save());await page.reload();await ready(page);await page.click('#addonTab');assert.equal(await page.inputValue('#addonScenario'),'cancelled');
+ await page.selectOption('#addonScenario','connected');await page.click('#undo');await ready(page);assert.equal(await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameAddonMock.model().scenario),'cancelled');
+ await page.route('**/api/editor/addons/diagnostics',route=>route.fulfill({json:{package:'com.cleanframe.addon.appleremote',installed:true,version:'0.1.0',checkedAt:Date.now()/1000,status:{running:true,android:{state:'connected'},apple:{state:'connected',pairedDevices:1},keyboard:{ready:true},events:[{id:1,kind:'command',action:'home'}]}}}));
+ await page.getByRole('button',{name:'TV-Diagnose',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#addonDiagnosticValues').textContent.includes('0.1.0'));
+ assert.equal(await page.locator('#addonTestControls').isVisible(),false);
+ await page.getByRole('button',{name:'Simulation',exact:true}).click();await page.selectOption('#addonScenario','connected');
+ await page.locator('#addonPackages button').filter({hasText:'iPhone Remote'}).click();
+ await page.waitForFunction(()=>window.CleanFrameEditor.qa().actions().includes('addon.setup.apple-remote'));
+ await mkdir(root+'.local/editor/qa/addons',{recursive:true});await page.screenshot({path:root+'.local/editor/qa/addons/editor-lab.png'});
+ for(const language of ['de','en'])for(const resolution of [720,1080,2160]){await page.selectOption('#language',language);await page.selectOption('#resolution',String(resolution));await ready(page);await page.screenshot({path:root+`.local/editor/qa/addons/editor-${language}-${resolution}.png`});}
+ assert.deepEqual(errors,[]);const saved=JSON.parse(await readFile(storage+'/project.json','utf8'));assert.ok(saved.addonLab);assert.equal(saved.tvSource,undefined);
+ console.log('Editor add-ons: simulation, persistence, undo, failure/cancellation, redacted events, read-only diagnosis and six previews passed.');
+}finally{await app.close();await rm(storage,{recursive:true,force:true});}

@@ -8,6 +8,7 @@ android {
     namespace 'com.cleanframe.philips'
     compileSdk 35
     buildToolsVersion '35.0.0'
+    buildFeatures { aidl true }
 
     defaultConfig {
         applicationId 'com.cleanframe.philips'

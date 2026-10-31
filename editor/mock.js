@@ -4,7 +4,7 @@
   const boot=window.CleanFrameEditorBoot;
   window.CleanFramePreview=true;
   localStorage.setItem('cleanframe.home.v1',JSON.stringify(boot.preferences));
-  const apps=[['com.google.android.youtube.tv','YouTube'],['com.netflix.ninja','Netflix'],['com.amazon.amazonvideo.livingroom','Prime Video'],['com.spotify.tv.android','Spotify'],['com.apple.atve.androidtv.appletv','Apple TV'],['tv.twitch.android.app','Twitch'],['com.disney.disneyplus','Disney+']].map(([appId,name])=>({appId,name}));
+  const apps=boot.tvSource?.apps||[['com.google.android.youtube.tv','YouTube'],['com.netflix.ninja','Netflix'],['com.amazon.amazonvideo.livingroom','Prime Video'],['com.spotify.tv.android','Spotify'],['com.apple.atve.androidtv.appletv','Apple TV'],['tv.twitch.android.app','Twitch'],['com.disney.disneyplus','Disney+']].map(([appId,name])=>({appId,name}));
   let media,scenario=boot.scenario;
   const calls=[];
   const publish=()=>window.dispatchEvent(new CustomEvent('cleanframe:spotify',{detail:{...media}}));
@@ -22,6 +22,7 @@
     publish();
   }
   setScenario(scenario);
+  let link = {phase:"idle"};
   const ok=()=>'{"ok":true}';
   window.CleanFrameNative={
     apps:()=>JSON.stringify(apps),spotifyState:()=>JSON.stringify(media),spotifyObserve:ok,
@@ -29,7 +30,8 @@
     home:()=>{notice('Vorschau: ursprünglichen Startbildschirm öffnen');return ok();},settings:()=>{notice('Vorschau: Android Einstellungen öffnen');return ok();},
     spotifyAccess:()=>{notice('Vorschau: Android Medienzugriff öffnen');return ok();},
     spotifyControl:command=>{calls.push(['control',command]);if(command==='toggle')Object.assign(media,{status:media.status==='playing'?'paused':'playing',speed:media.status==='playing'?0:1});else{media.title=command==='next'?'Awake':'A Walk';media.position=0;}publish();return ok();},
-    spotifySignIn:()=>{window.CleanFrameQR?.show();return ok();},
+    spotifyLink:op=>{if(op==='begin')link={phase:'pending',code:'PREVIEW',expiresAt:Date.now()+600000};if(op==='cancel')link={phase:'idle'};return JSON.stringify(link);},
+    remotePermission:op=>{notice('Simulation: Android Tastatur '+op);return ok();},
     spotifySignOut:()=>{calls.push(['signout']);setTimeout(()=>setScenario('unlinked'),20);return ok();}
   };
   window.CleanFrameMock={setScenario,state:()=>({...media}),calls,scenario:()=>scenario};

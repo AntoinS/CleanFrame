@@ -199,6 +199,24 @@ file using `DesignOverrides`; its rules have `view: qr` and `layout: *`.
 
 ## Preparing and transferring a TV version
 
+**TV-Stand holen** reads the running CleanFrame WebView through the configured
+ADB connection and imports its committed display preferences, home app order,
+design rules, app names/IDs and installed declarative add-ons into the draft.
+Open CleanFrame on the TV first. This does not launch, install or modify anything
+on the TV. A short-lived WebView forward is removed after each read, including
+failure. No Spotify credentials, notifications or general app storage are read.
+
+The previous complete draft is saved under **Gespeicherte Zwischenstände** before
+replacement. Failed reads, invalid data and concurrent edits leave the draft
+untouched. Imported preferences become the fresh baseline for later transfer;
+old guides and undo history remain in the saved snapshot. Restoring a snapshot
+also restores its preference baseline and imported app/add-on context.
+
+The editable preview uses the local CleanFrame source, with Spotify sample data.
+The import reports a version mismatch explicitly; it does not copy APK code or
+Android/system screens. The imported TV version and capture time appear below
+the element list. The editor chat directs TV import requests to this button.
+
 **Für TV vorbereiten** copies source, design and preference changes into an
 immutable input snapshot under `.local/editor/releases/<id>/`. It runs baseline
 regression checks against the unchanged layout, editor checks and a matrix of
@@ -245,3 +263,14 @@ suites and Android tests/lint remain part of a release. `capture-editor.mjs`
 checks all owned views in both layouts, languages and resolutions, captures
 representative previews, and rejects offscreen or unreachable menu actions.
 Native TV inspection is intentionally recorded as pending until a transfer.
+
+
+## Add-on workspace (0.8.0)
+
+Choose **Add-ons** in the top navigation. **Simulation** exposes package details in the actual TV UI, simulated install/remove/activation actions and failure scenarios. The right-hand virtual remote operates only the preview. The text field checks local routing/rejection and Unicode handling; it is not an emulation of Apple's wire protocol or proof of TV compatibility.
+
+Choose **TV-Diagnose** to read the installed native package version, service, Android/iPhone connection, keyboard readiness and a bounded event log. This view has no device control actions and does not launch a stopped service. Switch back to Entwurf or Live am TV to leave it. Package cards, details and removal dialogs can also be selected through the normal scene picker and edited in either language at 720p, 1080p and 4K.
+
+`addonLab` is saved with local undo and snapshots, separate from the immutable imported `tvSource`. It is not included in APK assets, design rules or preference changes. TV import clears it while retaining the previous complete draft as a named snapshot. Tests: `npm run check:editor:addons` and the diagnostic cases in `scripts/test-editor-workspace.py`.
+
+The visual scene picker includes **iPhone Remote Einrichtung** and **Spotify Anmeldung** using the actual packaged frontend. Pairing state is simulated locally; simulation cannot grant a TV permission or pair a phone.

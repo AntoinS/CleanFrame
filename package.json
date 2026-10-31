@@ -1,6 +1,6 @@
 {
   "name": "cleanframe",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "CleanFrame TV launcher, Mac design editor and add-on host",
   "scripts": {
@@ -19,8 +19,9 @@
     "check:device": "node --test scripts/test-device.mjs scripts/test-android-device.mjs",
     "check:performance": "node scripts/check-performance.mjs",
     "editor": "python3 scripts/editor_server.py --open",
-    "check:editor": "node scripts/check-editor.mjs && node scripts/check-editor-workspace.mjs",
-    "check:addons": "node scripts/check-addons-browser.mjs"
+    "check:editor": "node scripts/check-editor.mjs && node scripts/check-editor-workspace.mjs && node scripts/check-editor-import.mjs",
+    "check:addons": "node scripts/check-addons-browser.mjs && node scripts/check-addon-setup.mjs",
+    "check:editor:addons": "node scripts/check-editor-addons.mjs"
   },
   "devDependencies": {
     "ajv": "8.20.0",
@@ -33,6 +34,6 @@
     "node": "^22.13.0 || >=24"
   },
   "cleanframe": {
-    "androidVersionCode": 16
+    "androidVersionCode": 21
   }
 }

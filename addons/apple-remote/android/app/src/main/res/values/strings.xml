@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name" translatable="false">CleanFrame iPhone Remote</string>
+    <string name="keyboard_name" translatable="false">CleanFrame iPhone Keyboard</string>
+    <string name="pairing_access_name">CleanFrame · Automatische TV-Einrichtung</string>
+    <string name="pairing_access_description">Liest ausschließlich den Philips-Kopplungscode während einer von CleanFrame gestarteten Einrichtung (höchstens 30 Sekunden). Keine Aufzeichnung, keine Tasteneingaben, kein Lesen anderer Apps. Die Freigabe kann nach der Einrichtung wieder ausgeschaltet werden.</string>
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#B9D6C9</item>
+        <item name="android:windowBackground">#181818</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+    <style name="PairCodeTheme" parent="android:style/Theme.Material.Dialog.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#B9D6C9</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowCloseOnTouchOutside">false</item>
+    </style>
+</resources>

@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "experimental": true,
+  "sources": [
+    {
+      "name": "atv-core",
+      "repository": "https://github.com/corvofeng/atv-core",
+      "commit": "8a4ada29bb7cad31e0315c3387b277eb9ab8c988",
+      "sourcePath": "crates/atv-core",
+      "localPath": "vendor/atv-core",
+      "licenseDeclared": "MIT",
+      "licenseDeclaration": "https://github.com/corvofeng/atv-core/blob/8a4ada29bb7cad31e0315c3387b277eb9ab8c988/Cargo.toml",
+      "upstreamLicenseFilePresent": false,
+      "modifications": "Persistent authorization; verified M5 and M3 signatures; fresh keys; bounded protocol parsing; disabled debug HTTP; RTI keyboard and service lifecycle."
+    },
+    {
+      "name": "chromiacast",
+      "repository": "https://github.com/pronkproject/chromiacast",
+      "commit": "65a398c7fe1b0b65c5fe9e3455f047eae5b50631",
+      "localPath": "vendor/chromiacast",
+      "licenseDeclared": "MIT",
+      "licenseFile": "vendor/chromiacast/LICENSE",
+      "modifications": "Android Remote IME, active-field tickets, TLS peer pinning and redacted diagnostics. Three public Cast trust-anchor files renamed .pem to .crt without changing certificate bytes."
+    },
+    {
+      "name": "androidtvremote2",
+      "repository": "https://github.com/tronikos/androidtvremote2",
+      "commit": "e664a8e1f14ee458b14c646bfb3ea46f10367051",
+      "sourcePath": "src/androidtvremote2/remotemessage.proto",
+      "licenseDeclared": "Apache-2.0",
+      "licenseFile": "vendor/chromiacast/ANDROID_TV_IME_LICENSE.txt",
+      "noticeFile": "vendor/chromiacast/ANDROID_TV_IME_NOTICE.md",
+      "use": "Adapted IME Protobuf field names and numbers."
+    }
+  ],
+  "references": [
+    {
+      "url": "https://github.com/postlund/pyatv/blob/master/pyatv/protocols/companion/plist_payloads/rti_text_operations.py",
+      "use": "RTI wire reference; not vendored or installed."
+    },
+    {
+      "url": "https://github.com/postlund/pyatv/blob/master/tests/fake_device/companion.py",
+      "use": "RTI wire reference only; insecure fake-device authentication is not reused."
+    }
+  ]
+}

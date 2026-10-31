@@ -39,9 +39,10 @@
       observe: function (enabled, done) { action('spotifyObserve', [enabled], done); },
       control: function (command, done) { action('spotifyControl', [command], done); },
       access: function (done) { action('spotifyAccess', [], done); },
-      signIn: function (language, done) { action('spotifySignIn', [language], done); },
+      link: function (operation) { return invoke('spotifyLink', [operation]); },
       signOut: function (done) { action('spotifySignOut', [], done); }
     },
+    remotePermission: function (operation, done) { action('remotePermission', [operation], done); },
     addons: typeof native.addons === 'function' ? function (request) { return invoke('addons', [JSON.stringify(request)]); } : null,
     defaultApps: function () {
       var entries;

@@ -10,6 +10,8 @@ const project=JSON.parse(readFileSync(storage+'/project.json'));project.design={
 const page=await app.browser.newPage({viewport:{width:1600,height:1000}}),errors=[];
 page.on('pageerror',e=>errors.push(e.message));
 try{
+ // Agent availability is a fixture, not a dependency on a signed-in local Codex installation.
+ await page.route('**/api/editor/agent/state',route=>route.fulfill({json:{available:true,active:false,activity:'Test',messages:[]}}));
  await page.goto(app.url+'/editor/');await ready(page);await page.selectOption('#resolution','2160');await page.waitForTimeout(300);
  let selected=await page.evaluate(()=>CleanFrameEditor.selected);
  assert.equal(Number(await page.inputValue('#field-x')),Math.round(selected.rect.x*200)/100);

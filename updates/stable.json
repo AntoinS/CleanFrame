@@ -1,0 +1,15 @@
+{
+  "api": 1,
+  "id": "software",
+  "kind": "native",
+  "name": "CleanTV",
+  "packageName": "com.cleanframe.philips",
+  "version": "0.9.0",
+  "versionName": "0.9.0-android28",
+  "versionCode": 28,
+  "minAndroidApi": 31,
+  "apkUrl": "https://github.com/AntoinS/CleanTV/releases/download/v0.9.0/CleanTV-0.9.0-android28.apk",
+  "sha256": "3fbc19695b8fe87420a79311fbcd3b841e337b1cecd9a43ea1049e40d59b0626",
+  "signerSha256": "bbdba43ea0077e02afd0d3c7b74c0d52581dfa28d49508464ada0fbc08734e90",
+  "notes": "CleanTV-Version direkt in den Einstellungen, eigene Softwareupdate-Seite und verifizierte APK-Updates. Verbesserte Behandlung abgebrochener Add-on-Installationen. Einstellungen und Anmeldungen bleiben bei Updates erhalten."
+}

@@ -235,11 +235,11 @@ final class AddonManager implements AutoCloseable {
                 nativeInstaller.verifiedInstalled(descriptor);
                 String id = descriptor.getString("id");
                 boolean firstInstall = !installed.has(id);
-                boolean keepEnabled = firstInstall || installed.getJSONObject(id).optBoolean("enabled", false);
+                boolean keepEnabled = firstInstall || NativeAddonClient.request(context, nativeInstaller, descriptor, "status").optBoolean("enabled", false);
                 installed.put(id, new JSONObject(descriptor.toString()).put("enabled", keepEnabled));
                 save();
                 // A confirmed first installation opts into setup. Updates retain an owner's disabled state.
-                if (keepEnabled) NativeAddonClient.request(context, nativeInstaller, descriptor, "enable");
+                if (firstInstall) NativeAddonClient.request(context, nativeInstaller, descriptor, "enable");
             } else if (!nativeInstaller.present(descriptor.getString("packageName"))) {
                 installed.remove(descriptor.getString("id")); runtime.remove(descriptor.getString("id")); save();
             } else throw new IOException("Package removal was not confirmed.");

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1 — 2026-10-31
+
+- Preserve the native receiver’s own activation setting during an add-on update. Automatic activation is restricted to the first confirmed installation; enabling or disabling from integrated setup remains authoritative.
+
 ## 0.8.0 — 2026-10-31
 
 - Spotify QR sign-in and iPhone Remote setup now share CleanFrame Add-on settings. Includes pairing countdown, removable devices, keyboard setup and a host-owned Philips code sheet. Backend credentials remain native.

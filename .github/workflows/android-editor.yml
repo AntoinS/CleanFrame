@@ -24,6 +24,7 @@ jobs:
       - run: node scripts/check-options-browser.mjs
       - run: node scripts/check-spotify-browser.mjs
       - run: npm run check:editor
+      - run: node scripts/check-software-browser.mjs
       - run: python scripts/test-editor-tools.py && python scripts/test-editor-workspace.py
   android:
     runs-on: ubuntu-latest

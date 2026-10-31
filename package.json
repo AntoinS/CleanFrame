@@ -1,6 +1,6 @@
 {
   "name": "cleanframe",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "private": true,
   "description": "CleanFrame TV launcher, Mac design editor and add-on host",
   "scripts": {
@@ -34,6 +34,6 @@
     "node": "^22.13.0 || >=24"
   },
   "cleanframe": {
-    "androidVersionCode": 23
+    "androidVersionCode": 25
   }
 }

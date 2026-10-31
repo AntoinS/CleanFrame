@@ -12,7 +12,8 @@ try {
   window.CleanFrameNative={apps:()=>JSON.stringify([{appId:'com.google.android.youtube.tv',name:'YouTube'}]),spotifyState:()=>JSON.stringify({status:'playing',title:'Test song',artist:'Artist',duration:180000,position:0,permission:true}),spotifyObserve:()=>'{"ok":true}',addons:value=>{
    const req=JSON.parse(value);if(req.action==='remoteState')return JSON.stringify(__addons.runtime?.['apple-remote']||{});if(req.action==='state')return JSON.stringify(__addons);__addonCalls.push(req);__addons.busy=true;
    setTimeout(()=>{if(req.action==='refresh')__addons.catalog=[{...spotify,description:'Spotify playback'},{id:'note',name:'Note',version:'1.0.0',kind:'text',text:'<script>test</script>',description:'Example'}];
-    if(req.action==='install'){if(window.__cancelNext){__addons.error='Package operation cancelled.';window.__cancelNext=false;}else __addons.installed[req.id]={...__addons.catalog.find(p=>p.id===req.id),enabled:true};}
+    if(req.action==='install'){if(window.__cancelNext){__addons.error='Package operation cancelled.';window.__cancelNext=false;}else __addons.installed[req.id]={...__addons.catalog.find(p=>p.id===req.id),enabled:__addons.installed[req.id]?.enabled!==false};}
+    if(req.action==='updateAll'){const targets=CleanFrameAddons.updates(__addons);for(const item of targets){const old=__addons.installed[item.id];__addons.installed[item.id]={...old,...item,enabled:old.enabled};}__addons.batch={status:'complete',completed:targets.length,total:targets.length};}
     if(req.action==='remove')delete __addons.installed[req.id];
     if(req.action==='toggle')__addons.installed[req.id].enabled=!__addons.installed[req.id].enabled;
     __addons.busy=false;window.dispatchEvent(new CustomEvent('cleanframe:addons',{detail:structuredClone(__addons)}));},30);return '{"ok":true}';}};
@@ -41,6 +42,27 @@ try {
  assert.equal(await page.locator('#appearanceRows .is-focus').getAttribute('data-action'),'addon.setup.apple-remote');
  await page.keyboard.press('Escape');assert.equal(await page.locator('#appearanceRows .is-focus').getAttribute('data-action'),'addon.details.apple-remote');
  await scene('home');assert.equal(await page.locator('.addon-widget[data-addon="apple-remote"]').count(),0);
+ // Available updates never replace actual activation/version or block uninstall.
+ await page.evaluate(()=>{const r=__addons.installed['apple-remote'];r.version='0.1.0';r.versionCode=1;r.enabled=false;Object.assign(__addons.runtime['apple-remote'],{enabled:true,running:true,installedVersion:'0.1.1',installedVersionCode:2});const c=__addons.catalog.find(p=>p.id===r.id);c.version='0.1.2';c.versionCode=3;window.dispatchEvent(new CustomEvent('cleanframe:addons',{detail:structuredClone(__addons)}));});
+ await scene('settings');assert.equal(await page.locator('[data-action="settings.group.addons"] .addon-update-dot').count(),1);
+ await act('settings.group.addons');assert.equal(await page.locator('[data-action="addon.details.apple-remote"] .addon-update-dot').count(),1);
+ await act('addon.details.apple-remote');assert.match(await page.locator('#addonMetadata').textContent(),/0.1.1/);assert.match(await page.locator('#addonMetadata').textContent(),/0.1.2/);
+ assert.equal(await page.locator('[data-action="addon.toggle.apple-remote"]').textContent(),'Deaktivieren');
+ assert.notEqual(await page.locator('[data-action="addon.remove.apple-remote"]').getAttribute('aria-disabled'),'true');
+ await act('addon.remove.apple-remote');await page.keyboard.press('Escape');assert.ok(await page.evaluate(()=>__addons.installed['apple-remote']));
+ await page.evaluate(()=>{__addons.runtime['apple-remote']={available:false,installedVersion:'0.1.1',installedVersionCode:2};window.dispatchEvent(new CustomEvent('cleanframe:addons',{detail:structuredClone(__addons)}));});
+ assert.equal(await page.locator('[data-action="addon.toggle.apple-remote"]').textContent(),'Status nicht verfügbar');
+ assert.notEqual(await page.locator('[data-action="addon.remove.apple-remote"]').getAttribute('aria-disabled'),'true');
+ await page.evaluate(()=>{const c=__addons.catalog.find(p=>p.id==='apple-remote');c.version='0.1.0';c.versionCode=1;window.dispatchEvent(new CustomEvent('cleanframe:addons',{detail:structuredClone(__addons)}));});
+ assert.equal(await page.locator('[data-action="addon.install.apple-remote"]').count(),0);
+ // Update-all updates installed packages only and retains per-package choices and normal preferences.
+ const prefs=await page.evaluate(()=>localStorage.getItem('cleanframe.home.v1'));
+ await page.evaluate(()=>{__addons.catalog.find(p=>p.id==='note').version='1.1.0';__addons.catalog.find(p=>p.id==='spotify').version='1.1.0';__addons.installed.note.enabled=false;__addons.installed.note.customSetting='keep';window.dispatchEvent(new CustomEvent('cleanframe:addons',{detail:structuredClone(__addons)}));});
+ await page.keyboard.press('Escape');assert.equal(await page.locator('[data-action="addon.updateAll"]').textContent(),'Alle aktualisieren (2)');await act('addon.updateAll');await ready();
+ assert.equal(await page.evaluate(()=>__addons.installed.note.enabled),false);assert.equal(await page.evaluate(()=>__addons.installed.note.customSetting),'keep');
+ assert.equal(await page.evaluate(()=>__addons.installed.spotify.version),'1.1.0');assert.equal(await page.locator('.addon-update-dot').count(),0);
+ assert.equal(await page.evaluate(()=>localStorage.getItem('cleanframe.home.v1')),prefs);
+ assert.match(await page.locator('#appearanceStatus').textContent(),/2\/2/);
  // Status events keep the selected package and scroll position, even in a longer catalog.
  await page.evaluate(()=>{for(let i=0;i<12;i++)__addons.catalog.push({id:'test-'+i,name:'Test extension '+i,version:'1.0.0',kind:'text',description:'A long descriptive title for an extension that must remain inside its card.'});window.dispatchEvent(new CustomEvent('cleanframe:addons',{detail:structuredClone(__addons)}));});
  await scene('settings');await act('settings.group.addons');await act('addon.tab.discover');await act('addon.details.test-11');await page.keyboard.press('Escape');

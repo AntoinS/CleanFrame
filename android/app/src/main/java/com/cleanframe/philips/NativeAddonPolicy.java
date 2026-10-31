@@ -25,7 +25,7 @@ final class NativeAddonPolicy {
 
     static void validateUrl(String value) throws IOException {
         if (!value.matches(java.util.regex.Pattern.quote(RELEASES) + "[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*\\.apk"))
-            throw new IOException("APK must be a reviewed CleanFrame release asset.");
+            throw new IOException("APK must be a reviewed CleanTV release asset.");
     }
 
     static boolean allowedRedirect(String value) {
@@ -56,8 +56,13 @@ final class NativeAddonPolicy {
         validate(descriptor);
         if (!descriptor.getString("packageName").equals(packageName) || !descriptor.getString("version").equals(versionName)
                 || descriptor.getLong("versionCode") != versionCode) throw new IOException("APK identity or version does not match catalog.");
-        if (!descriptor.getString("signerSha256").equals(signer) || !hostSigner.equals(signer))
-            throw new IOException("APK signing certificate is not trusted by this host.");
+        verifyInstalledIdentity(descriptor, packageName, signer, hostSigner);
+    }
+
+    static void verifyInstalledIdentity(JSONObject descriptor, String packageName, String signer, String hostSigner) throws Exception {
+        validate(descriptor);
+        if (!descriptor.getString("packageName").equals(packageName) || !descriptor.getString("signerSha256").equals(signer) || !hostSigner.equals(signer))
+            throw new IOException("Installed add-on identity or signing certificate is not trusted.");
     }
 
     static void verifyChecksum(String actual, String expected) throws IOException {

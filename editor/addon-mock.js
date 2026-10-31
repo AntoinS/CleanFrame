@@ -7,7 +7,7 @@
   ];
   let model=copy(boot.addonLab||{installed:(boot.tvSource?.addons||[catalog[0]]).map(p=>({id:p.id,version:p.version,enabled:p.enabled!==false})),scenario:'connected',selected:'apple-remote'});
   let setupPin=null;
-  let busy=false,error='',pending=null,events=[],seq=0;
+  let busy=false,error='',pending=null,batch={},events=[],seq=0;
   const imported=Object.fromEntries((boot.tvSource?.addons||[]).map(p=>[p.id,p]));
   const descriptor=id=>catalog.find(p=>p.id===id)||imported[id];
   const installed=()=>Object.fromEntries(model.installed.filter(p=>descriptor(p.id)).map(p=>[p.id,{...descriptor(p.id),...p}]));
@@ -16,7 +16,7 @@
     const packages=installed(),remote=packages['apple-remote'],active=remote?.enabled!==false;
     const connected=active&&!['unpaired','disconnected','input-unavailable'].includes(model.scenario);
     const runtime=remote?{'apple-remote':{enabled:active,running:active,setupInterface:1,automaticPairingAccess:model.automaticPairingAccess===true,philips:{state:connected?'connected':'disconnected'},android:{state:connected?'connected':'disconnected'},apple:{state:model.scenario==='unpaired'?'unpaired':connected?'connected':'idle',pairedDevices:model.scenario==='unpaired'?0:1,devices:model.scenario==='unpaired'?[]:[{id:'preview-iphone',name:'iPhone (Simulation)'}],...(setupPin||{})},keyboard:{ready:connected,selected:connected},events:copy(events)}}:{};
-    return {api:2,installed:packages,catalog:catalog.map(p=>({...p,version:model.scenario==='update'&&p.id==='apple-remote'?'0.2.0':p.version})),runtime,busy,error,pending};
+    return {api:2,installed:packages,catalog:catalog.map(p=>({...p,version:model.scenario==='update'?(p.id==='apple-remote'?'0.2.0':'1.1.0'):p.version})),runtime,busy,error,pending,batch};
   }
   function publish(changed=false){window.dispatchEvent(new CustomEvent('cleanframe:addons',{detail:state()}));window.dispatchEvent(new CustomEvent('cleanframe:addon-simulation',{detail:{model:copy(model),changed,events:copy(events)}}));}
   function request(input){
@@ -28,6 +28,22 @@
     error='';
     if(action==='setup'){log('setup','preview');window.dispatchEvent(new CustomEvent('cleanframe:preview-notice',{detail:'Simulation: Einrichtung der iPhone-Fernbedienung. Kein TV-Zugriff.'}));publish();return JSON.stringify(state());}
     if(action==='refresh'){publish();return JSON.stringify(state());}
+    if(action==='updateAll'){
+      const targets=window.CleanFrameAddons.updates(state()).map(p=>copy(p));
+      batch={status:'running',completed:0,total:targets.length};busy=true;publish();
+      const next=()=>{
+        const target=targets[batch.completed];
+        if(!target){batch.status='complete';busy=false;pending=null;publish(true);return;}
+        batch.id=target.id;batch.name=target.name;pending={action:'install',id:target.id,status:'simulation'};publish();
+        setTimeout(()=>{
+          if(['download-error','cancelled'].includes(model.scenario)){batch.status=model.scenario==='cancelled'?'cancelled':'failed';error='Simulation: Updates gestoppt. Bestehende Einstellungen bleiben erhalten.';busy=false;pending=null;publish(true);return;}
+          const prior=model.installed.find(p=>p.id===target.id);
+          if(prior)Object.assign(prior,{version:target.version});
+          log('update',target.id);batch.completed++;publish(true);next();
+        },300);
+      };
+      next();return JSON.stringify(state());
+    }
     if(!descriptor(id))return JSON.stringify(state());
     busy=true;pending={action,id,status:'simulation'};publish();
     setTimeout(()=>{
@@ -35,7 +51,7 @@
       else if(model.scenario==='cancelled'&&['install','remove'].includes(action)){log(action,'cancelled');}
       else{
         const prior=model.installed.find(p=>p.id===id);
-        if(action==='install'){model.installed=model.installed.filter(p=>p.id!==id);model.installed.push({id,enabled:prior?.enabled!==false,version:state().catalog.find(p=>p.id===id)?.version||descriptor(id).version});}
+        if(action==='install'){model.installed=model.installed.filter(p=>p.id!==id);model.installed.push({...prior,id,enabled:prior?.enabled!==false,version:state().catalog.find(p=>p.id===id)?.version||descriptor(id).version});}
         if(action==='remove')model.installed=model.installed.filter(p=>p.id!==id);
         if(action==='toggle'&&prior)prior.enabled=!prior.enabled;
         log(action);

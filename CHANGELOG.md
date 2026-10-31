@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.3 — 2026-10-31
+
+- Separate installed native identity from catalog download verification. Status, settings and uninstall remain available when the catalog or cached descriptor refers to a different version; package and certificate checks remain mandatory.
+- Compare installed versions numerically and use Android version codes for native updates. Older catalogs no longer offer downgrades. Catalog refresh runs in the background at most once per 15 minutes.
+- Blue update indicators in Settings and add-on cards, available-version details, and Update all with a persistent sequential queue. Android still confirms every APK update; cancellation or failure stops remaining updates.
+- Updates preserve native activation/pairing and widget activation. Unknown runtime status is shown explicitly instead of implying that an installed receiver is disabled.
+
 ## 0.8.2 — 2026-10-31
 
 - iPhone setup now refers to the TV’s device name instead of a fixed CleanFrame TV label. The reviewed iPhone Remote 0.1.1 package follows the Android device name and preserves existing pairing when it changes.

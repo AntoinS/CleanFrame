@@ -953,6 +953,7 @@
   function addonText(value) { return ADDONS.text(S.c.language, value); }
   function addonItem(id, state) {
     var found = {}, installed = state.installed[id];
+    if (installed) installed = ADDONS.installedVersion(installed, state.runtime);
     state.catalog.some(function (item) { if (item.id !== id) return false; Object.keys(item).forEach(function (key) { found[key] = item[key]; }); return true; });
     if (installed) Object.keys(installed).forEach(function (key) { found[key] = installed[key]; });
     if (found.kind === 'native' && state.runtime && state.runtime[id]) found.runtime = state.runtime[id];
@@ -964,17 +965,25 @@
     if (text && typeof text === 'object') text = text[S.c.language] || text.en;
     return typeof text === 'string' ? text : item.id === 'spotify' ? addonText('Playback, account and widget appearance') : addonText(item.kind === 'native' ? 'Native service' : 'Home widget');
   }
+  function addonActivation(item) {
+    if (item.kind !== 'native') return addonText(item.enabled === false ? 'Disabled' : 'Enabled');
+    if (!item.runtime || typeof item.runtime.enabled !== 'boolean') return addonText(item.runtime && item.runtime.available === false ? 'Status unavailable' : 'Checking status…');
+    return addonText(item.runtime.enabled ? 'Enabled' : 'Disabled');
+  }
   function addonStatus(item, state) {
-    var installed = state.installed[item.id], update = false;
-    state.catalog.some(function (entry) { if (entry.id === item.id && installed && (entry.version !== installed.version || entry.versionCode && entry.versionCode !== installed.versionCode)) update = true; return update; });
-    if (!installed) return addonText('Available');
-    if (update) return addonText('Update available');
-    if (item.enabled === false) return addonText('Disabled');
-    return addonText(item.kind === 'native' ? item.runtime && item.runtime.running && (item.runtime.philips || item.runtime.android) && ((item.runtime.philips || item.runtime.android).state === 'connected' || item.runtime.philips && item.runtime.philips.paired && !item.runtime.philips.hasError) ? 'Ready' : 'Not connected' : 'Enabled');
+    if (!state.installed[item.id]) return addonText('Available');
+    var label = addonActivation(item);
+    if (item.kind === 'native' && item.runtime && item.runtime.enabled && item.runtime.running) {
+      var backend = item.runtime.philips || item.runtime.android;
+      if (backend && (backend.state === 'connected' || backend.paired && !backend.hasError)) label = addonText('Ready');
+    }
+    if (ADDONS.updates(state).some(function (entry) { return entry.id === item.id; })) label += ' · ' + addonText('Update available');
+    return label;
   }
   function addonSections(t) {
     var state = ADDONS.state(), rows = [], ids, item, current, candidate, actions, pending = state.pending || {};
-    var busy = state.busy || pending.status === 'awaiting-confirmation' || pending.status === 'checking';
+    var busy = state.busy || pending.status === 'awaiting-confirmation' || pending.status === 'checking' || state.batch && state.batch.status === 'running';
+    var updates = ADDONS.updates(state);
     if (t.group === 'addons') {
       t.addonTab = t.addonTab || 'installed';
       rows.push({ id: 'addon-tabs', horizontal: true, tabs: true, items: [
@@ -982,10 +991,11 @@
         { action: 'addon.tab.discover', label: translate('Discover'), tab: true, active: t.addonTab === 'discover' },
         { action: 'addon.refresh', label: translate('Refresh catalog'), disabled: busy }
       ] });
+      if (updates.length) rows.push({ id: 'addon-updates', horizontal: true, items: [{ action: 'addon.updateAll', label: addonText('Update all') + ' (' + updates.length + ')', disabled: busy }] });
       ids = t.addonTab === 'installed' ? Object.keys(state.installed) : state.catalog.map(function (entry) { return entry.id; });
       for (var i = 0; i < ids.length; i += 3) rows.push({ id: 'addon-cards-' + i, horizontal: true, cards: true, items: ids.slice(i, i + 3).map(function (id) {
         var entry = addonItem(id, state);
-        return { action: 'addon.details.' + id, label: entry.name, addon: entry, description: addonDescription(entry), status: addonStatus(entry, state) };
+        return { action: 'addon.details.' + id, label: entry.name, addon: entry, description: addonDescription(entry), status: addonStatus(entry, state), update: updates.some(function (candidate) { return candidate.id === id; }) };
       }) });
       return rows;
     }
@@ -995,11 +1005,11 @@
     current = state.installed[item.id];
     state.catalog.some(function (entry) { if (entry.id === item.id) { candidate = entry; return true; } return false; });
     actions = [];
-    if (candidate && (!current || candidate.version !== current.version || candidate.versionCode && candidate.versionCode !== current.versionCode)) actions.push({ action: 'addon.install.' + item.id, label: translate(current ? 'Update' : 'Download'), disabled: busy });
+    if (candidate && (!current || ADDONS.newer(candidate, ADDONS.installedVersion(current, state.runtime)))) actions.push({ action: 'addon.install.' + item.id, label: translate(current ? 'Update' : 'Download'), disabled: busy });
     if (current) {
       if (item.kind === 'native') actions.push({ action: 'addon.setup.' + item.id, label: addonText('Set up'), disabled: busy });
       else if (item.id === 'spotify') actions.push({ action: 'group.spotify', label: translate('Settings'), disabled: busy });
-      actions.push({ action: 'addon.toggle.' + item.id, label: translate(item.kind === 'native' ? item.runtime && item.runtime.enabled ? 'Disable' : 'Enable' : item.enabled === false ? 'Enable' : 'Disable'), disabled: busy || item.kind === 'native' && (!item.runtime || typeof item.runtime.enabled !== 'boolean') });
+      actions.push({ action: 'addon.toggle.' + item.id, label: item.kind === 'native' && (!item.runtime || typeof item.runtime.enabled !== 'boolean') ? addonActivation(item) : translate(item.kind === 'native' ? item.runtime.enabled ? 'Disable' : 'Enable' : item.enabled === false ? 'Enable' : 'Disable'), disabled: busy || item.kind === 'native' && (!item.runtime || typeof item.runtime.enabled !== 'boolean') });
       actions.push({ action: 'addon.remove.' + item.id, label: translate('Uninstall'), disabled: busy });
     }
     if (actions.length) rows.push({ id: 'addon-actions', horizontal: true, items: actions });
@@ -1693,7 +1703,8 @@
   }
   function renderAddonManager(t, command) {
     var state = ADDONS.state(), sections = detailSections(t), item = t.group === 'addon-detail' ? addonItem(t.addonId, state) : null;
-    var scrollTop = appearanceRows.scrollTop, content = '', runtime, installed;
+    var scrollTop = appearanceRows.scrollTop, content = '', runtime, installed, update = item && ADDONS.updates(state).filter(function (entry) { return entry.id === item.id; })[0];
+    var batch = state.batch || {};
     function value(label, text) { return '<section class="addon-fact"><h3>' + esc(addonText(label)) + '</h3><p>' + esc(text) + '</p></section>'; }
     function connection(entry) { return addonText(entry && (entry.state === 'connected' || entry.connected === true) ? 'Connected' : 'Not connected'); }
     appearanceRows.className = 'appearance-rows addon-manager';
@@ -1706,13 +1717,14 @@
     }
     content += sections.map(function (section) {
       return '<section class="setting-section' + (section.horizontal ? ' is-horizontal' : '') + (section.cards ? ' addon-card-row' : '') + (section.tabs ? ' addon-tabs' : '') + ' section-' + section.id + '"><div class="setting-options"' + (section.tabs ? ' role="tablist"' : '') + '>' + section.items.map(function (entry) {
-        if (entry.addon) return command(entry, addonIcon(entry.addon) + '<span class="setting-copy"><span class="setting-name">' + esc(entry.label) + '</span><span class="setting-description">' + esc(entry.description) + '</span><span class="addon-status">' + esc(entry.status) + '</span></span>', 'addon-card');
+        if (entry.addon) return command(entry, addonIcon(entry.addon) + '<span class="setting-copy"><span class="setting-name">' + esc(entry.label) + (entry.update ? '<span class="addon-update-dot" aria-hidden="true"></span>' : '') + '</span><span class="setting-description">' + esc(entry.description) + '</span><span class="addon-status">' + esc(entry.status) + '</span></span>', 'addon-card');
         return command(entry, '<span>' + esc(entry.label) + '</span>', section.tabs ? 'addon-tab' + (entry.active ? ' is-current' : '') : 'addon-action');
       }).join('') + '</div></section>';
     }).join('');
     if (t.group === 'addons' && sections.length === 1) content += '<section id="addonEmpty" class="addon-empty"><h3>' + esc(addonText(t.addonTab === 'installed' ? 'No installed add-ons' : 'No catalog available')) + '</h3><p>' + esc(addonText(t.addonTab === 'installed' ? 'Find extensions in Discover.' : 'Refresh the catalog to see approved extensions.')) + '</p></section>';
+    if (ADDONS.updates(state).length) content += '<p class="addon-update-note">' + esc(addonText('Settings and pairings are retained. Android confirms each app update.')) + '</p>';
     if (item) {
-      content += '<section id="addonMetadata" class="addon-metadata">' + value('Version', item.version || addonText('Not provided')) + value('Provider', item.author || item.provider || addonText('Not provided')) + value('License', item.license || addonText('Not provided')) + value('Permissions', Array.isArray(item.permissions) ? item.permissions.map(addonText).join(' · ') || addonText('No additional permissions') : item.permissions || addonText('Not provided')) + '</section>';
+      content += '<section id="addonMetadata" class="addon-metadata">' + value('Version', item.version || addonText('Not provided')) + (update ? value('Available version', update.version) : '') + (item.kind === 'native' && installed ? value('Activation', addonActivation(item)) : '') + value('Provider', item.author || item.provider || addonText('Not provided')) + value('License', item.license || addonText('Not provided')) + value('Permissions', Array.isArray(item.permissions) ? item.permissions.map(addonText).join(' · ') || addonText('No additional permissions') : item.permissions || addonText('Not provided')) + '</section>';
       if (item.kind === 'native') content += '<section id="addonConnections" class="addon-metadata">' + value('Installation', addonText(installed ? 'Installed' : 'Not installed')) + value('Android connection', runtime.philips && runtime.philips.paired && !runtime.philips.hasError ? addonText(runtime.philips.state === 'connected' ? 'Connected' : 'Ready') : connection(runtime.philips || runtime.android)) + value('iPhone pairing', runtime.apple && (runtime.apple.connected || runtime.apple.state === 'connected') ? addonText('Connected') : runtime.apple && (runtime.apple.pairedDevices || runtime.apple.devices && runtime.apple.devices.length) ? addonText('Paired') : addonText('Not paired')) + '</section>';
     }
     setHTML(appearanceRows, content);
@@ -1720,7 +1732,14 @@
     t.addonScroll = undefined;
     var selected = appearanceRows.querySelector('.is-focus');
     if (selected) selected.scrollIntoView({ block: 'nearest' });
-    setHTML(appearanceStatus, state.busy || state.pending && (state.pending.status === 'awaiting-confirmation' || state.pending.status === 'checking') ? '<p class="addon-progress">' + esc(state.busy ? translate('Working…') : addonText('Confirm the operation in Android.')) + '</p>' : state.error ? '<p class="setting-error">' + esc(state.error) + '</p>' : '');
+    var status = '';
+    if (state.busy || batch.status === 'running' || state.pending && (state.pending.status === 'awaiting-confirmation' || state.pending.status === 'checking')) {
+      status = '<p class="addon-progress">' + esc(batch.status === 'running' ? addonText('Updating add-ons') + ' · ' + batch.completed + '/' + batch.total + (batch.name ? ' · ' + batch.name : '') : translate('Working…'));
+      if (state.pending && state.pending.status === 'awaiting-confirmation') status += ' · ' + esc(addonText('Confirm the operation in Android.'));
+      status += '</p>';
+    } else if (batch.status === 'complete' && batch.total) status = '<p class="addon-progress">' + esc(addonText('Updates completed') + ' · ' + batch.completed + '/' + batch.total) + '</p>';
+    if (state.error) status += '<p class="setting-error">' + esc(state.error) + '</p>';
+    setHTML(appearanceStatus, status);
     setHTML(appearanceDesc, '<span class="remote-key">OK</span><span>' + esc(addonText(t.group === 'addons' ? 'Choose an extension' : 'Manage extension')) + '</span>');
   }
   function renderAddonSetup(t, command) {
@@ -1978,7 +1997,7 @@
     settings: function (t, el) {
       var html = '';
       settingsRows().forEach(function (r) {
-        html += '<button type="button" tabindex="-1" class="settings-group' + (r.id === t.f.id ? ' is-focus' : '') + '" data-z="row" data-i="0" data-id="' + r.id + '" data-action="settings.' + (r.id === 'editor' ? 'editor' : 'group.' + r.id) + '"><span class="settings-group-copy"><span class="settings-group-name">' + esc(translate(r.label)) + '</span><span class="settings-group-value">' + esc(translate(r.value)) + '</span></span>' + icon('right') + '</button>';
+        html += '<button type="button" tabindex="-1" class="settings-group' + (r.id === t.f.id ? ' is-focus' : '') + '" data-z="row" data-i="0" data-id="' + r.id + '" data-action="settings.' + (r.id === 'editor' ? 'editor' : 'group.' + r.id) + '"><span class="settings-group-copy"><span class="settings-group-name">' + esc(translate(r.label)) + (r.id === 'addons' && ADDONS.updates().length ? '<span class="addon-update-dot" role="img" aria-label="' + esc(addonText('Update available')) + '"></span>' : '') + '</span><span class="settings-group-value">' + esc(translate(r.value)) + '</span></span>' + icon('right') + '</button>';
       });
       setHTML(el.list, html);
     },

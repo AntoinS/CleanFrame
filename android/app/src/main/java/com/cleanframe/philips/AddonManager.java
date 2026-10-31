@@ -22,6 +22,7 @@ final class AddonManager implements AutoCloseable {
     private boolean setupPolling;
     private final JSONObject runtime = new JSONObject();
     private long lastRuntimePoll;
+    private long lastCatalogCheck;
     private boolean polling;
     private volatile boolean closed;
     private final Runnable installerChanged = this::resume;
@@ -29,6 +30,7 @@ final class AddonManager implements AutoCloseable {
     private final Runnable changed;
     private JSONObject installed = new JSONObject();
     private JSONArray catalog = new JSONArray();
+    private AddonUpdateBatch batch = new AddonUpdateBatch(null);
     private boolean busy;
     private String error = "";
 
@@ -43,6 +45,7 @@ final class AddonManager implements AutoCloseable {
             if (storage.getBaseFile().exists()) {
                 JSONObject saved = new JSONObject(new String(storage.readFully(), StandardCharsets.UTF_8));
                 installed = saved.getJSONObject("installed");
+                batch = new AddonUpdateBatch(saved.optJSONObject("batch"));
                 catalog = saved.optJSONArray("catalog");
                 if (catalog == null) catalog = new JSONArray();
             } else {
@@ -67,7 +70,7 @@ final class AddonManager implements AutoCloseable {
         return item != null && item.optBoolean("enabled", true);
     }
     synchronized String state() {
-        try { return new JSONObject().put("installed", installed).put("catalog", catalog).put("busy", busy).put("error", error).put("api", 2).put("runtime", runtime).put("pending", NativeAddonInstaller.pending(context)).toString(); }
+        try { return new JSONObject().put("installed", installed).put("catalog", catalog).put("busy", busy).put("error", error).put("api", 2).put("runtime", runtime).put("pending", NativeAddonInstaller.pending(context)).put("batch", batch.state(false)).toString(); }
         catch (Exception failure) { return "{\"error\":\"Add-on state unavailable\"}"; }
     }
     synchronized String request(String value) {
@@ -95,14 +98,20 @@ final class AddonManager implements AutoCloseable {
                 });
                 return "{\"ok\":true}";
             }
-            if (action.equals("state")) { pollRuntime(); return state(); }
-            if (busy || pendingOperation()) throw new IllegalStateException("Another add-on operation is running.");
-            if (!action.matches("refresh|install|remove|toggle")) throw new IllegalArgumentException("Unknown add-on action.");
-            if (!action.equals("refresh") && !id.matches("[a-z][a-z0-9-]{0,47}")) throw new IllegalArgumentException("Invalid add-on ID.");
+            if (action.equals("state")) {
+                pollRuntime();
+                if (!busy && !pendingOperation() && !batch.active() && System.currentTimeMillis() - lastCatalogCheck > 15 * 60 * 1000)
+                    request("{\"action\":\"refresh\"}");
+                return state();
+            }
+            if (busy || pendingOperation() || batch.active()) throw new IllegalStateException("Another add-on operation is running.");
+            if (!action.matches("refresh|install|remove|toggle|updateAll")) throw new IllegalArgumentException("Unknown add-on action.");
+            if (!action.equals("refresh") && !action.equals("updateAll") && !id.matches("[a-z][a-z0-9-]{0,47}")) throw new IllegalArgumentException("Invalid add-on ID.");
             busy = true; error = "";
+            if (action.equals("refresh")) lastCatalogCheck = System.currentTimeMillis();
             worker.execute(() -> {
-                try { operate(action, id); }
-                catch (Exception failure) { synchronized (this) { error = failure.getMessage() == null ? "Add-on operation failed." : failure.getMessage(); } }
+                try { if (action.equals("updateAll")) { startBatch(); runBatch(); } else operate(action, id); }
+                catch (Exception failure) { synchronized (this) { error = failure.getMessage() == null ? "Add-on operation failed." : failure.getMessage(); batch.stop("failed"); try { save(); } catch (Exception ignored) { } } }
                 finally { synchronized (this) { busy = false; } if (!closed) changed.run(); }
             });
             return "{\"ok\":true}";
@@ -117,7 +126,8 @@ final class AddonManager implements AutoCloseable {
         if (descriptor == null) throw new IOException("Remote add-on is not installed.");
         return NativeAddonClient.request(context, nativeInstaller, descriptor, command);
     }
-    private void operate(String action, String id) throws Exception {
+    private void operate(String action, String id) throws Exception { operate(action, id, null); }
+    private void operate(String action, String id, JSONObject target) throws Exception {
         if (closed) throw new IOException("Add-on manager closed.");
         JSONObject packageData = null;
         JSONArray downloaded = null;
@@ -136,7 +146,13 @@ final class AddonManager implements AutoCloseable {
         } else if (action.equals("install")) {
             JSONObject entry = null;
             synchronized (this) { for (int i = 0; i < catalog.length(); i++) if (catalog.getJSONObject(i).getString("id").equals(id)) entry = new JSONObject(catalog.getJSONObject(i).toString()); }
+            if (target != null) entry = new JSONObject(target.toString());
             if (entry == null) throw new IOException("Refresh the catalog before downloading.");
+            synchronized (this) {
+                JSONObject current = installed.optJSONObject(id);
+                if (current != null && !entry.optString("kind").equals(current.optString("kind"))) throw new IOException("An update cannot change the add-on type.");
+                if (current != null && !entry.optString("kind").equals("native") && !AddonVersions.newer(entry, current)) throw new IOException("This add-on is already up to date.");
+            }
             if (entry.getString("kind").equals("native")) { nativeInstaller.install(entry); return; }
             byte[] bytes = download(entry.getString("path"), 65536);
             StringBuilder sha = new StringBuilder();
@@ -158,7 +174,7 @@ final class AddonManager implements AutoCloseable {
                 // The receiver owns activation persistence. Refresh its status asynchronously.
                 return;
             }
-            if (action.equals("setup")) throw new IOException("This widget is configured in CleanFrame.");
+            if (action.equals("setup")) throw new IOException("This widget is configured in CleanTV.");
         }
         synchronized (this) {
             if (closed) throw new IOException("Add-on manager closed.");
@@ -177,6 +193,42 @@ final class AddonManager implements AutoCloseable {
             } catch (Exception failure) { installed = oldInstalled; catalog = oldCatalog; throw failure; }
         }
     }
+    private synchronized void startBatch() throws Exception {
+        JSONArray targets = new JSONArray();
+        for (int i = 0; i < catalog.length(); i++) {
+            JSONObject entry = catalog.getJSONObject(i), current = installed.optJSONObject(entry.getString("id"));
+            if (current == null) continue;
+            if (current.optString("kind").equals("native")) current = nativeInstaller.installedVersion(current);
+            if (AddonVersions.newer(entry, current)) targets.put(entry);
+        }
+        batch = AddonUpdateBatch.start(targets); save();
+    }
+    private void runBatch() throws Exception {
+        while (!closed) {
+            JSONObject target, current;
+            synchronized (this) {
+                if (!batch.active() || pendingOperation()) return;
+                target = batch.current(); current = installed.optJSONObject(target.getString("id"));
+            }
+            String id = target.getString("id");
+            try {
+                if (current != null && current.optString("kind").equals("native")) current = nativeInstaller.installedVersion(current);
+                if (AddonVersions.newer(target, current)) {
+                    operate("install", id, target);
+                    synchronized (this) {
+                        if (pendingOperation()) return;
+                        if (NativeAddonInstaller.pending(context).optString("status").equals("permission-required")) throw new IOException("Allow add-on installation in Android, then start updates again.");
+                    }
+                }
+                synchronized (this) { batch.confirm(id); save(); }
+                if (!closed) changed.run();
+            } catch (Exception failure) {
+                synchronized (this) { batch.stop("failed"); error = "Update stopped: " + failure.getMessage(); save(); }
+                return;
+            }
+        }
+    }
+
     static void validate(JSONObject item) throws Exception {
         boolean nativeKind = item.optString("kind").equals("native");
         if (item.getInt("api") != (nativeKind ? 2 : 1) || !item.getString("id").matches("[a-z][a-z0-9-]{0,47}") || !item.getString("version").matches("[0-9]+\\.[0-9]+\\.[0-9]+")) throw new IOException("Unsupported package identity or API.");
@@ -205,7 +257,7 @@ final class AddonManager implements AutoCloseable {
         return out.toByteArray();
     }
     private void save() throws Exception {
-        byte[] bytes = new JSONObject().put("installed", installed).put("catalog", catalog).toString().getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = new JSONObject().put("installed", installed).put("catalog", catalog).put("batch", batch.state(true)).toString().getBytes(StandardCharsets.UTF_8);
         FileOutputStream output = storage.startWrite();
         try { output.write(bytes); storage.finishWrite(output); }
         catch (Exception failure) { storage.failWrite(output); throw failure; }
@@ -217,9 +269,9 @@ final class AddonManager implements AutoCloseable {
     synchronized void resume() {
         if (closed) return;
         worker.execute(() -> {
-            try { reconcile(); }
+            try { reconcile(); runBatch(); }
             catch (Exception failure) {
-                synchronized (this) { error = "Installed add-on verification failed. The add-on is not available."; }
+                synchronized (this) { error = "The package operation could not be verified. Existing settings are retained."; batch.stop("failed"); try { save(); } catch (Exception ignored) { } }
                 try { NativeAddonInstaller.savePending(context, new JSONObject()); } catch (Exception ignored) { }
             }
             if (!closed) changed.run();
@@ -235,7 +287,9 @@ final class AddonManager implements AutoCloseable {
                 nativeInstaller.verifiedInstalled(descriptor);
                 String id = descriptor.getString("id");
                 boolean firstInstall = !installed.has(id);
-                boolean keepEnabled = firstInstall || NativeAddonClient.request(context, nativeInstaller, descriptor, "status").optBoolean("enabled", false);
+                boolean keepEnabled = firstInstall || installed.getJSONObject(id).optBoolean("enabled", true);
+                try { keepEnabled = firstInstall || NativeAddonClient.request(context, nativeInstaller, descriptor, "status").optBoolean("enabled", keepEnabled); }
+                catch (Exception unavailable) { /* Installation is verified; a restarting service does not invalidate it. */ }
                 installed.put(id, new JSONObject(descriptor.toString()).put("enabled", keepEnabled));
                 save();
                 // A confirmed first installation opts into setup. Updates retain an owner's disabled state.
@@ -244,8 +298,10 @@ final class AddonManager implements AutoCloseable {
                 installed.remove(descriptor.getString("id")); runtime.remove(descriptor.getString("id")); save();
             } else throw new IOException("Package removal was not confirmed.");
             NativeAddonInstaller.savePending(context, new JSONObject());
+            if (pending.optString("action").equals("install")) { batch.confirm(descriptor.getString("id")); save(); }
         } else if (status.equals("cancelled") || status.equals("failed")) {
-            error = status.equals("cancelled") ? "Package operation cancelled." : "Package operation failed; the previous version was kept.";
+            error = status.equals("cancelled") ? "Package operation cancelled. Remaining updates were stopped." : "Package operation failed; the previous version was kept. Remaining updates were stopped.";
+            batch.stop(status); save();
             NativeAddonInstaller.savePending(context, new JSONObject());
         }
         for (int i = 0; i < catalog.length(); i++) {
@@ -270,6 +326,7 @@ final class AddonManager implements AutoCloseable {
         worker.execute(() -> {
             try {
                 reconcile();
+                runBatch();
                 JSONObject snapshot;
                 synchronized (this) { snapshot = new JSONObject(installed.toString()); }
                 java.util.Iterator<String> ids = snapshot.keys();
@@ -278,7 +335,11 @@ final class AddonManager implements AutoCloseable {
                     if (!item.optString("kind").equals("native")) continue;
                     JSONObject result;
                     try { result = NativeAddonClient.request(context, nativeInstaller, item, "status"); }
-                    catch (Exception failure) { result = new JSONObject().put("available", false).put("error", "Add-on service is unavailable or untrusted."); }
+                    catch (Exception failure) {
+                        result = new JSONObject().put("available", false).put("error", "Add-on service is unavailable or untrusted.");
+                        try { JSONObject actual = nativeInstaller.installedVersion(item); result.put("installedVersion", actual.getString("version")).put("installedVersionCode", actual.getLong("versionCode")); }
+                        catch (Exception untrusted) { /* Never infer activation from stale package metadata. */ }
+                    }
                     synchronized (this) { runtime.put(id, result); }
                 }
             } catch (Exception ignored) { }

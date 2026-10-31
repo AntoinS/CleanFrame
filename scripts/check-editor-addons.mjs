@@ -17,6 +17,12 @@ try{
  await page.selectOption('#addonScenario','download-error');await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameNative.addons(JSON.stringify({action:'install',id:'apple-remote'})));
  await page.waitForFunction(()=>window.CleanFrameEditor.win().CleanFrameAddonMock.state().error.includes('fehlgeschlagen'));
  assert.equal(await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameAddonMock.state().installed['apple-remote'].version),'0.1.0');
+ await page.selectOption('#addonScenario','update');
+ await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameNative.addons(JSON.stringify({action:'toggle',id:'spotify'})));await page.waitForTimeout(400);
+ await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameNative.addons(JSON.stringify({action:'updateAll'})));
+ await page.waitForFunction(()=>window.CleanFrameEditor.win().CleanFrameAddonMock.state().batch.status==='complete');
+ assert.equal(await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameAddonMock.state().installed.spotify.enabled),false);
+ assert.equal(await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameAddonMock.state().batch.completed),2);
  await page.selectOption('#addonScenario','cancelled');await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameNative.addons(JSON.stringify({action:'remove',id:'apple-remote'})));await page.waitForTimeout(400);
  assert.ok(await page.evaluate(()=>window.CleanFrameEditor.win().CleanFrameAddonMock.state().installed['apple-remote']));
  await page.evaluate(()=>window.CleanFrameEditor.save());await page.reload();await ready(page);await page.click('#addonTab');assert.equal(await page.inputValue('#addonScenario'),'cancelled');

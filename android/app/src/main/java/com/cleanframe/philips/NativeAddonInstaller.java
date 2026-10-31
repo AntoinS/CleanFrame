@@ -56,6 +56,16 @@ final class NativeAddonInstaller {
         PackageInfo info = packages.getPackageInfo(descriptor.getString("packageName"), PackageManager.GET_SIGNING_CERTIFICATES);
         verify(info, descriptor); return info;
     }
+    PackageInfo installedIdentity(JSONObject descriptor) throws Exception {
+        PackageInfo info = packages.getPackageInfo(descriptor.getString("packageName"), PackageManager.GET_SIGNING_CERTIFICATES);
+        NativeAddonPolicy.verifyInstalledIdentity(descriptor, info.packageName, signer(info),
+                signer(packages.getPackageInfo(context.getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES)));
+        return info;
+    }
+    JSONObject installedVersion(JSONObject descriptor) throws Exception {
+        PackageInfo info = installedIdentity(descriptor);
+        return new JSONObject(descriptor.toString()).put("version", info.versionName).put("versionCode", info.getLongVersionCode());
+    }
     void verify(PackageInfo info, JSONObject descriptor) throws Exception {
         if (info == null) throw new IOException("APK could not be inspected.");
         NativeAddonPolicy.verifyArtifact(descriptor, info.packageName, info.versionName, info.getLongVersionCode(), signer(info),
@@ -73,8 +83,10 @@ final class NativeAddonInstaller {
     void install(JSONObject descriptor) throws Exception {
         checkActive();
         NativeAddonPolicy.validate(descriptor);
+        if (present(descriptor.getString("packageName")) && !AddonVersions.newer(descriptor, installedVersion(descriptor)))
+            throw new IOException("This version is already installed or older than the installed add-on.");
         String host = packages.getPackageInfo(context.getPackageName(), 0).versionName;
-        if (!NativeAddonPolicy.hostCompatible(host, descriptor.getString("minHostVersion"))) throw new IOException("Update CleanFrame before installing this add-on.");
+        if (!NativeAddonPolicy.hostCompatible(host, descriptor.getString("minHostVersion"))) throw new IOException("Update CleanTV before installing this add-on.");
         if (!packages.canRequestPackageInstalls()) {
             savePending(context, new JSONObject().put("action", "install").put("id", descriptor.getString("id")).put("status", "permission-required"));
             context.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + context.getPackageName())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -111,7 +123,7 @@ final class NativeAddonInstaller {
     }
     void remove(JSONObject descriptor) throws Exception {
         checkActive();
-        verifiedInstalled(descriptor);
+        installedIdentity(descriptor);
         // No privileged DELETE_PACKAGES permission: Android always asks the user.
         int request = (int) (System.nanoTime() & 0x3fffffff);
         savePending(context, new JSONObject().put("action", "remove").put("id", descriptor.getString("id")).put("descriptor", descriptor)

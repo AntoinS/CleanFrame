@@ -20,12 +20,12 @@ final class NativeAddonClient {
     static JSONObject request(Context context, NativeAddonInstaller installer, JSONObject descriptor, JSONObject command) throws Exception {
         String operation = command.optString("op");
         if (!operation.matches("status|setupStatus|enable|disable|philipsPairBegin|philipsPairFinish|applePairBegin|unpair")) throw new IOException("Unsupported host operation.");
-        installer.verifiedInstalled(descriptor);
+        installer.installedIdentity(descriptor);
         CountDownLatch ready = new CountDownLatch(1);
         AtomicReference<IRemoteAddon> remote = new AtomicReference<>();
         ServiceConnection connection = new ServiceConnection() {
             @Override public void onServiceConnected(ComponentName name, IBinder binder) {
-                try { installer.verifiedInstalled(descriptor); remote.set(IRemoteAddon.Stub.asInterface(binder)); }
+                try { installer.installedIdentity(descriptor); remote.set(IRemoteAddon.Stub.asInterface(binder)); }
                 catch (Exception ignored) { }
                 ready.countDown();
             }
@@ -42,6 +42,8 @@ final class NativeAddonClient {
             JSONObject result = new JSONObject(response);
             if (result.has("error")) throw new IOException("Add-on request failed. Open setup for details.");
 
+            android.content.pm.PackageInfo actual = installer.installedIdentity(descriptor);
+            result.put("installedVersion", actual.versionName).put("installedVersionCode", actual.getLongVersionCode());
             return result;
         } finally { context.unbindService(connection); }
     }

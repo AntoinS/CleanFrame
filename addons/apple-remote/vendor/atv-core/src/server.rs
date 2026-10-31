@@ -314,7 +314,7 @@ impl AtvServer {
         let mut mdns_fullnames = Vec::new();
         #[cfg(not(target_os = "macos"))]
         {
-            let host_name = format!("{}.local.", identity.name.replace(' ', "-"));
+            let host_name = format!("cleanframe-{}.local.", identity.server_identifier.to_lowercase());
             for (service_type, port, properties) in services {
                 let info = ServiceInfo::new(
                     service_type,

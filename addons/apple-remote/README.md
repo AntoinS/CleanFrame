@@ -1,8 +1,10 @@
-# CleanFrame iPhone Remote · experimental 0.1.0
+# CleanFrame iPhone Remote · experimental 0.1.1
 
 A separate Android app receives authenticated Apple Companion commands and forwards supported keys through the Philips JointSpace service on the same TV. The Mac is not part of the runtime path. All visible setup and device management are integrated into **CleanFrame → Settings → Add-ons → iPhone Remote**. Android owns keyboard/accessibility permissions and app installation dialogs.
 
 **Experimental release:** secure pairing and reconnection, Home/YouTube navigation, volume, Play/Pause, and live Spotify typing/deletion/search were confirmed on the reference Philips and iPhone. This is not a general Apple TV implementation. Custom app keyboards, selection replacement, cross-app input, Netflix and the full lifecycle matrix remain unverified. Siri, microphone forwarding and AirPlay streaming are excluded.
+
+The iPhone discovers the receiver under the TV’s Android device name. Renaming the TV updates its announcement without replacing its stored identity or paired devices. If firmware exposes no device name, the model name (or Android TV) is used. The DNS hostname uses the stable receiver identity so punctuation in a display name does not become a hostname.
 
 ## Build on the Mac
 

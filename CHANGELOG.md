@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2 — 2026-10-31
+
+- iPhone setup now refers to the TV’s device name instead of a fixed CleanFrame TV label. The reviewed iPhone Remote 0.1.1 package follows the Android device name and preserves existing pairing when it changes.
+
 ## 0.8.1 — 2026-10-31
 
 - Preserve the native receiver’s own activation setting during an add-on update. Automatic activation is restricted to the first confirmed installation; enabling or disabling from integrated setup remains authoritative.

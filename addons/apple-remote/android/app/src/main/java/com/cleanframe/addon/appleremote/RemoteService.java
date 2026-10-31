@@ -14,6 +14,8 @@ import android.net.LinkProperties;
 import android.net.Network;
 import android.net.wifi.WifiManager;
 import android.os.Binder;
+import android.os.Build;
+import android.provider.Settings;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -46,6 +48,7 @@ public final class RemoteService extends Service {
     private final java.util.concurrent.atomic.AtomicLong activationEpoch = new java.util.concurrent.atomic.AtomicLong();
     private boolean nativeAvailable;
     private volatile String startedAddress = "";
+    private volatile String startedName = "";
     private ConnectivityManager connectivity;
     private WifiManager.MulticastLock multicast;
     private SecretStore secrets;
@@ -192,11 +195,20 @@ public final class RemoteService extends Service {
         return "";
     }
 
+    private String deviceName() {
+        String name = null;
+        try { name = Settings.Global.getString(getContentResolver(), Settings.Global.DEVICE_NAME); }
+        catch (SecurityException unavailable) { /* Some firmware restricts global settings reads. */ }
+        if (name == null || name.trim().isEmpty()) name = Build.MODEL;
+        return name == null || name.trim().isEmpty() ? "Android TV" : name.trim();
+    }
+
     private void updateConnection() {
         if (!enabled || !nativeAvailable) return;
         long epoch = activationEpoch.get();
         String address = address();
-        if (address.equals(startedAddress)) {
+        String name = deviceName();
+        if (address.equals(startedAddress) && (address.isEmpty() || name.equals(startedName))) {
             if (address.isEmpty()) serviceError = "Waiting for a local network connection.";
             else maybeAutomaticSetup();
             return;
@@ -204,14 +216,14 @@ public final class RemoteService extends Service {
         nativeStop();
         if (address.isEmpty()) { serviceError = "Waiting for a local network connection."; return; }
         try {
-            JSONObject command = newCommand("start").put("name", "CleanFrame TV").put("address", address).put("backend", "host").put("secrets", secrets.read());
+            JSONObject command = newCommand("start").put("name", name).put("address", address).put("backend", "host").put("secrets", secrets.read());
             if (!enabled || epoch != activationEpoch.get()) return;
             hostInput.enable();
             if (!enabled || epoch != activationEpoch.get()) { hostInput.disableGuard(); return; }
             String result = RemoteNative.request(command.toString());
             RequestPolicy.parseRunningResponse(result);
             if (!enabled || epoch != activationEpoch.get()) { nativeStop(); return; }
-            cached = result; startedAddress = address; serviceError = "";
+            cached = result; startedAddress = address; startedName = name; serviceError = "";
             maybeAutomaticSetup();
         } catch (Exception | LinkageError failure) {
             startedAddress = "";
@@ -302,6 +314,7 @@ public final class RemoteService extends Service {
         refreshPairCodeNotification();
         if (nativeAvailable) invoke(newCommand("stop"));
         startedAddress = "";
+        startedName = "";
     }
 
     private void refreshPairCodeNotification() {
@@ -341,7 +354,7 @@ public final class RemoteService extends Service {
     private JSONObject state(boolean diagnostics) {
         try {
             JSONObject state = new JSONObject(cached);
-            state.put("api", 1).put("package", getPackageName()).put("version", "0.1.0").put("enabled", isEnabled(this));
+            state.put("api", 1).put("package", getPackageName()).put("version", "0.1.1").put("enabled", isEnabled(this));
             state.put("codeEntryAvailable", pairCodeWindow.available(SystemClock.elapsedRealtime()));
             state.put("backend", "philips");
             state.put("automaticPairingAccess", PhilipsPairingAccessibility.connected()).put("automaticPairings", automaticPairings);
